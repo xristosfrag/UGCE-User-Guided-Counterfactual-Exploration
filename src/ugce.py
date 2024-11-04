@@ -151,6 +151,7 @@ class UGCE:
         self.immutables = immutables if immutables else []
         self.setup_constraints()
         best_individuals = self.evolve()
+        print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(best_individuals.genes, self.model)}")
         return best_individuals
 
     def distance(self, x_prime):

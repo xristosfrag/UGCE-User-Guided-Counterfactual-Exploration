@@ -309,7 +309,6 @@ class UGCE:
         return Individual(genes)
         
     def crossover(self, parents, crossover_points=1):
-        self.set_seed(self.seed_number + self.seed_update_number)  # Seed for crossover
         num_parents = len(parents)
         num_features = len(self.feature_columns)
         crossover_points = sorted(random.sample(range(1, num_features), crossover_points))
@@ -364,9 +363,10 @@ class UGCE:
         return offspring1, offspring2
 
     def mutate_individual(self, individual):
-        self.set_seed(self.seed_number + self.seed_update_number)  # Seed for mutation
-        print(self.seed_number + self.seed_update_number)
-        for i in range(len(individual)):
+        for i in range(len(self.feature_columns)):
+            self.seed_update_number += 1
+            self.set_seed(self.seed_number + self.seed_update_number)
+            # print(f"Mutation per attribute Seed number: {self.seed_number + self.seed_update_number}")
             if random.random() < self.mutpb:
                 feature_name = self.feature_columns[i]
                 if i in self.immutables:
@@ -443,7 +443,7 @@ class UGCE:
                     print("Stopping early due to lack of fitness improvement.")
                     break
                 # Re-seed at the start of each generation
-                self.seed_update_number = gen
+                self.seed_update_number += gen
                 self.set_seed(self.seed_number + self.seed_update_number)
 
                 print(f"Generation {gen}")
@@ -470,6 +470,9 @@ class UGCE:
 
                 for mutant in offspring:
                     self.seed_update_number += 1  
+                    self.set_seed(self.seed_number + self.seed_update_number)
+                    # print(f"Mutation Seed number: {self.seed_number + self.seed_update_number}")
+
                     if random.random() < self.mutpb:
                         print(f"Mutation Seed number: {self.seed_number + self.seed_update_number}")
                         self.mutate_individual(mutant)

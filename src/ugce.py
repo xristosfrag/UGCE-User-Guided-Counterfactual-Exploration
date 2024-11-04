@@ -523,11 +523,23 @@ class UGCE:
         best_individuals = self.best_individuals(population, self.diversity_top_k)
         cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
         display_cfe_comparison(self.inverse_transformed_x, cfe_with_feature_names)
+    
+        # If dynamic constraints are enabled, ask the user for acceptance and update constraints
+        if self.dynamic_constraints:
+            print("Dynamic constraints enabled.")
+            best_individuals = self.best_individuals(population, self.diversity_top_k)
+            cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
+            display_cfe_comparison(self.inverse_transformed_x, cfe_with_feature_names)
             accepted = self.ask_user_acceptance()
             
             while not accepted:
                 # Update constraints based on user input
                 self.get_updated_constraints()
+                
+                # Delete the fitness scores to force re-evaluation
+                for ind in population:
+                    ind.fitness = None
+
                 # Update the fitness values based on the new constraints
                 self.fitness_assignment(population)
                 
@@ -536,7 +548,7 @@ class UGCE:
                 population = generations(population, 30, max_fitness)
                 print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
                 best_individuals = self.best_individuals(population, self.diversity_top_k)
-                cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals))  # Transform the best individual list to a dictionary format
+                cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
                 display_cfe_comparison(self.inverse_transformed_x, cfe_with_feature_names)
                 print()
                 accepted = self.ask_user_acceptance()

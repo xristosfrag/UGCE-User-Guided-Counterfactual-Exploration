@@ -375,22 +375,22 @@ class UGCE:
                     continue
                 if feature_name in self.categorical_columns:
                     possible_values = self.features_ranges[feature_name]
-                    original_value = individual[i]
+                    original_value = individual.genes[i]
                     new_value = original_value
                     while new_value == original_value:
                         new_value = random.choice(possible_values)
-                    individual[i] = new_value
+                    individual.genes[i] = new_value
                 elif feature_name in self.one_hot_encode_features:
                     one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
-                    current_index = next(idx for idx in one_hot_group if individual[list(self.feature_columns).index(idx)] == 1)
+                    current_index = next(idx for idx in one_hot_group if individual.genes[list(self.feature_columns).index(idx)] == 1)
                     chosen_feature = current_index
                     while chosen_feature == current_index:
                         chosen_feature = random.choice(one_hot_group)
                     for one_hot_feature in one_hot_group:
                         index = list(self.feature_columns).index(one_hot_feature)
-                        individual[index] = 1 if one_hot_feature == chosen_feature else 0
+                        individual.genes[index] = 1 if one_hot_feature == chosen_feature else 0
                 else:
-                    original_value = individual[i]
+                    original_value = individual.genes[i]
                     new_value = original_value
                     if self.constraints.get(i):
                         lower, upper = self.constraints[i]
@@ -407,7 +407,7 @@ class UGCE:
                     else:
                         while new_value == original_value:
                             new_value = random.uniform(lower, upper)
-                    individual[i] = new_value
+                    individual.genes[i] = new_value
         return individual
     
     def fitness_assignment(self, population):

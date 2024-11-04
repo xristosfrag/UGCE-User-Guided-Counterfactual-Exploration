@@ -444,6 +444,7 @@ class UGCE:
             print("Starting evolution...")
             # Initialize variables to track improvements
             generations_without_improvement = 0
+            elite_count = max(1, int(self.elite_ratio * len(population)))  # Calculate the number of elite individuals
 
             for gen in range(num_generations):
                 # Termination criterion based on lack of improvement
@@ -455,6 +456,10 @@ class UGCE:
                 self.set_seed(self.seed_number + self.seed_update_number)
 
                 print(f"Generation: {gen}")
+                if self.elite_ratio > 0:
+                    # Select the top elite individuals from the current population
+                    elite_individuals = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:elite_count]
+
                 # print(f"Generation Seed number: {self.seed_number + self.seed_update_number}")
                 if self.selection_method == "tournament":
                     parents = self.tournament_selection(population, self.num_parents)
@@ -466,8 +471,10 @@ class UGCE:
                     parents = self.sus_selection(population, self.num_parents)
                 
                 offspring = []
+                offspring_size = len(population) - elite_count
+
                 # Create offspring until the required population size is reached
-                while len(offspring) < len(population):
+                while len(offspring) < offspring_size:
                     self.seed_update_number += 1
                     self.set_seed(self.seed_number + self.seed_update_number)
                     # print(f"Crossover Seed number: {self.seed_number + self.seed_update_number}")
@@ -489,24 +496,31 @@ class UGCE:
 
                     if random.random() < self.mutpb:
                         self.mutate_individual(mutant)
-
-                print(f"Population size: {len(population)}, offspring size: {len(offspring)}")
-                self.fitness_assignment(offspring)
                 
-                population = self.tournament_selection(population + offspring, self.population_size)
+                # Evaluate the fitness of the offspring
+                self.fitness_assignment(offspring)
+                print(f"Population size: {len(population)}, offspring size: {len(offspring)}")
+
+                # Ensure only the needed number of offspring are retained
+                if self.elite_ratio > 0:
+                    ## keep the best individuals from the offspring (offspring_size)
+                    offspring = sorted(offspring, key=lambda ind: ind.fitness, reverse=True)[:offspring_size]
+                    
+                    # Combine elite individuals with the new offspring to form the next generation
+                    population = elite_individuals + offspring
+                else:
+                    ## keep the best individuals from the current population and the offspring
+                    population = sorted(population + offspring, key=lambda ind: ind.fitness, reverse=True)[:self.population_size]
+
+                print("Final population size: ", len(population))
                 best_individual = max(population, key=lambda ind: ind.fitness)
                 print(f"Generation {gen}: Best fitness {best_individual.fitness}")
                     
-                if self.elite_ratio > 0:
-                    continue
-                    # population = tools.selBest(population + offspring, int(self.population_size * self.elite_ratio))
-                else:    
-                    population[:] = offspring
-                best_fitness, avg_fitness = self.max_avg_fitness(population)
-                print(f"    Average fitness: {avg_fitness}, max fitness: {best_fitness}")
+                current_best_fitness, avg_fitness = self.max_avg_fitness(population)
+                print(f"    Average fitness: {avg_fitness}, max fitness: {current_best_fitness}")
                 # Track improvement
-                if best_fitness > best_fitness:
-                    best_fitness = best_fitness
+                if current_best_fitness > best_fitness:
+                    best_fitness = current_best_fitness
                     generations_without_improvement = 0
                 else:
                     generations_without_improvement += 1
@@ -519,14 +533,14 @@ class UGCE:
         best_individuals = self.best_individuals(population, self.diversity_top_k)
         cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
         display_cfe_comparison(self.inverse_transformed_x, cfe_with_feature_names)
+        print()
     
         # If dynamic constraints are enabled, ask the user for acceptance and update constraints
         if self.dynamic_constraints:
             print("Dynamic constraints enabled.")
             best_individuals = self.best_individuals(population, self.diversity_top_k)
             cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
-            display_cfe_comparison(self.inverse_transformed_x, cfe_with_feature_names)
-            accepted = self.ask_user_acceptance()
+            accepted = self.ask_user_acceptance()            
             
             while not accepted:
                 # Update constraints based on user input
@@ -576,7 +590,6 @@ class UGCE:
         # Calculate the percentage of identical individuals in the population
         score = (identical_count / len(population)) * 100
         return score
-
 
     def best_individuals(self, population, n=1):
         return max(population, key=lambda ind: ind.fitness)

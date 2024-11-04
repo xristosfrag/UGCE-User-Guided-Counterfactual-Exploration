@@ -406,7 +406,7 @@ class UGCE:
                     individual.genes[i] = new_value
         return individual
     
-    def fitness_assignment(self, population):
+    def fitness_assignment(self, population, clear_fitness=False):
         """
         Assign fitness values to the population based on the evaluation function.
         
@@ -414,6 +414,10 @@ class UGCE:
             population (list): The population of individuals to evaluate.
         """
         self.set_seed(self.seed_number)
+        if clear_fitness:
+            for ind in population: # recalculate the fitness for the entire population
+                ind.fitness = self.evaluate(ind.genes)
+        else:
         for ind in population:
             ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes)
             
@@ -546,12 +550,8 @@ class UGCE:
                 # Update constraints based on user input
                 self.get_updated_constraints()
                 
-                # Delete the fitness scores to force re-evaluation
-                for ind in population:
-                    ind.fitness = None
-
                 # Update the fitness values based on the new constraints
-                self.fitness_assignment(population)
+                self.fitness_assignment(population, clear_fitness=True)
                 
                 print(f"Constraints: {self.constraints}")
                 print(f"Immutable features: {self.immutables}")

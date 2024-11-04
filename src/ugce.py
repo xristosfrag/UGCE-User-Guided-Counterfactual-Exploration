@@ -421,9 +421,21 @@ class UGCE:
             ind.fitness = self.evaluate(ind.genes)
             
     def evolve(self):
-        # self.set_seed(self.seed_number + self.seed_update_number) # Re-seed at the start of each evolution to maintain consistency
-        population = [self.generate_individual() for _ in range(self.population_size)]
-        self.fitness_assignment(population)
+        # print("Initial seed number: ", self.seed_number + self.seed_update_number)
+        population = []    
+        unique_individuals = set()
+        while len(population) < self.population_size:
+            new_individual = self.generate_individual()
+            # Convert individual genes to a tuple for hashing and comparison
+            genes_tuple = tuple(new_individual.genes)
+
+            # Add the individual to the population only if unique
+            if genes_tuple not in unique_individuals:
+                population.append(new_individual)
+                unique_individuals.add(genes_tuple)
+        print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
+        
+        self.fitness_assignment(population)        
         print(f"Count of identical individuals: {self.identical_individuals_percentage(population)}")
         
         print(f"Constraints: {self.constraints}")

@@ -416,10 +416,11 @@ class UGCE:
         self.set_seed(self.seed_number)
         if clear_fitness:
             for ind in population: # recalculate the fitness for the entire population
+                ind.fitness = None
                 ind.fitness = self.evaluate(ind.genes)
         else:
-        for ind in population:
-            ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes)
+            for ind in population:
+                ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes)
             
     def population(self):
         population = []

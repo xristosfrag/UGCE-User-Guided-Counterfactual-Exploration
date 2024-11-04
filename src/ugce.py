@@ -472,15 +472,21 @@ class UGCE:
                     parents = self.sus_selection(population, self.num_parents)
                 
                 offspring = []
-                print(len(parents))
-                for i in range(0, len(population) - 1, 2):
+                # Create offspring until the required population size is reached
+                while len(offspring) < len(population):
                     self.seed_update_number += 1
+                    self.set_seed(self.seed_number + self.seed_update_number)
+                    # print(f"Crossover Seed number: {self.seed_number + self.seed_update_number}")
+
+                    # Select parent pairs for crossover, allowing repetition of parents
+                    parent1, parent2 = deepcopy(random.choice(parents)), deepcopy(random.choice(parents))
                     if random.random() < self.cxpb:
-                        print(f"Crossover Seed number: {self.seed_number + self.seed_update_number}")
-                        child1, child2 = self.crossover([parents[i], parents[i + 1]])
+                        # Perform crossover
+                        child1, child2 = self.crossover([parent1, parent2])
                         offspring.extend([child1, child2])
                     else:
-                        offspring.extend([parents[i], parents[i + 1]])
+                        # If no crossover, directly clone parents
+                        offspring.extend([parent1, parent2])
 
                 for mutant in offspring:
                     self.seed_update_number += 1  

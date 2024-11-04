@@ -129,6 +129,7 @@ class UGCE:
         self.data_distribution = data_distribution
         
         self.seed_number = seed_number
+        self.seed_update_number = 0
         self.num_generations = num_generations
         self.population_size = population_size
         self.num_parents = num_parents
@@ -144,12 +145,6 @@ class UGCE:
         self.mutpb = mutpb
         # Reset seeds to ensure reproducibility in each call
         self.set_seed(self.seed_number)
-        
-        # self.toolbox.register("individual", self.generate_individual)
-        # self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
-        # self.toolbox.register("mate", self.crossover)
-        # self.toolbox.register("mutate", self.mutate_individual)        
-        # self.register_selection_method(tournsize=self.tournsize)
         
         self.original_prediction = f_model(x, self.model)
         self.constraints = constraints if constraints else {}
@@ -206,6 +201,7 @@ class UGCE:
         return penalty, reward
    
     def evaluate(self, individual):
+        # Convert genes to a tuple (hashable) to use as a cache key              
         y_prime = f_model(np.array(individual), self.model)
         d = self.distance(individual)
         s = self.sparsity(individual)
@@ -362,7 +358,7 @@ class UGCE:
                 offspring1[i] = parents[current_parent_idx].genes[i]
                 offspring2[i] = parents[(current_parent_idx + 1) % num_parents].genes[i]
 
-        return offspring1, offspring2
+        return Individual(offspring1), Individual(offspring2)
 
     def mutate_individual(self, individual):
         for i in range(len(self.feature_columns)):
@@ -417,8 +413,9 @@ class UGCE:
         Args:
             population (list): The population of individuals to evaluate.
         """
+        self.set_seed(self.seed_number)
         for ind in population:
-            ind.fitness = self.evaluate(ind.genes)
+            ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes)
             
     def evolve(self):
         # print("Initial seed number: ", self.seed_number + self.seed_update_number)
@@ -439,7 +436,6 @@ class UGCE:
         print(f"Constraints: {self.constraints}")
         print(f"Immutable features: {self.immutables}")
              
-        self.fitness_assignment(population)
         max_fitness, avg_fitness = self.max_avg_fitness(population)
         print(f"Initial population average fitness: {avg_fitness}, max fitness: {max_fitness}")
         best_fitness = float("-inf")

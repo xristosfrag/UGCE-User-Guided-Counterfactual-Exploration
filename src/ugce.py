@@ -200,14 +200,13 @@ class UGCE:
         # Return both the penalty and the reward
         return penalty, reward
    
-    def evaluate(self, individual):
-        # Convert genes to a tuple (hashable) to use as a cache key              
+    def evaluate(self, individual):            
         y_prime = f_model(np.array(individual), self.model)
         d = self.distance(individual)
         s = self.sparsity(individual)
         penalty, reward = self.violation(individual)
         if y_prime == self.original_prediction:
-            penalty += 1000
+            penalty += 10000
         else:
             reward += 1000
         return - self.lamda1 * d - self.lamda2 * s - self.lamda3 * penalty + self.lamda4 * reward

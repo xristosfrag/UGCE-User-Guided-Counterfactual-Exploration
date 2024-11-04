@@ -421,19 +421,20 @@ class UGCE:
         for ind in population:
             ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes)
             
-    def evolve(self):
-        # print("Initial seed number: ", self.seed_number + self.seed_update_number)
-        population = []    
+    def population(self):
+        population = []
         unique_individuals = set()
         while len(population) < self.population_size:
             new_individual = self.generate_individual()
-            # Convert individual genes to a tuple for hashing and comparison
             genes_tuple = tuple(new_individual.genes)
-
-            # Add the individual to the population only if unique
             if genes_tuple not in unique_individuals:
                 population.append(new_individual)
                 unique_individuals.add(genes_tuple)
+        return population
+
+    def evolve(self):
+        # print("Initial seed number: ", self.seed_number + self.seed_update_number)
+        population = self.population()
         print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
         
         self.fitness_assignment(population)        

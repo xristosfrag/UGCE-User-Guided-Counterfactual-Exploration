@@ -29,7 +29,7 @@ sys.path.append(ugce_dir)
 sep = get_system_slash()
 sys.path.append(ugce_dir + get_system_slash() + 'src')
 
-from utils import inverse_transform_individual, f_model, display_cfe_comparison
+from utils import transform_individual, inverse_transform_individual, f_model, display_cfe_comparison
 
 random.seed(42)
 np.random.seed(42)

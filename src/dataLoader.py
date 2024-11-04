@@ -68,7 +68,7 @@ def load_compas():
     FEATURE_COLUMNS = data.columns
     y, _, _, _, _ = preprocess_dataset(y, continuous_features=[])
     min_max_scaler = preprocessing.MinMaxScaler()
-    data_scaled = min_max_scaler.fit_transform(data[FEATURE_COLUMNS])
+    data_scaled = min_max_scaler.fit_transform(data[FEATURE_COLUMNS].values)
     features_ranges = {}
     for col in data.columns:
         if col in one_hot_encode_features or col in categorical_columns:

@@ -436,8 +436,6 @@ class UGCE:
         print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
         
         self.fitness_assignment(population)        
-        print(f"Count of identical individuals: {self.identical_individuals_percentage(population)}")
-        
         print(f"Constraints: {self.constraints}")
         print(f"Immutable features: {self.immutables}")
              
@@ -460,8 +458,8 @@ class UGCE:
                 self.seed_update_number += gen
                 self.set_seed(self.seed_number + self.seed_update_number)
 
-                print(f"Generation {gen}")
-                print(f"Generation Seed number: {self.seed_number + self.seed_update_number}")#, {self.toolbox.random_seed}")
+                print(f"Generation: {gen}")
+                # print(f"Generation Seed number: {self.seed_number + self.seed_update_number}")
                 if self.selection_method == "tournament":
                     parents = self.tournament_selection(population, self.num_parents)
                 elif self.selection_method == "roulette":
@@ -494,17 +492,15 @@ class UGCE:
                     # print(f"Mutation Seed number: {self.seed_number + self.seed_update_number}")
 
                     if random.random() < self.mutpb:
-                        print(f"Mutation Seed number: {self.seed_number + self.seed_update_number}")
                         self.mutate_individual(mutant)
 
-                for ind in offspring:
-                    ind.fitness = self.evaluate(ind)
+                print(f"Population size: {len(population)}, offspring size: {len(offspring)}")
+                self.fitness_assignment(offspring)
                 
-                population = self.rank_selection(population + offspring, self.population_size)
+                population = self.tournament_selection(population + offspring, self.population_size)
                 best_individual = max(population, key=lambda ind: ind.fitness)
                 print(f"Generation {gen}: Best fitness {best_individual.fitness}")
                     
-                
                 if self.elite_ratio > 0:
                     continue
                     # population = tools.selBest(population + offspring, int(self.population_size * self.elite_ratio))
@@ -524,12 +520,9 @@ class UGCE:
         population = generations(population, self.num_generations, best_fitness)
         print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
 
-        # If dynamic constraints are enabled, ask the user for acceptance and update constraints
-        if self.dynamic_constraints:
-            print("Dynamic constraints enabled.")
-            best_individuals = self.best_individuals(population, self.diversity_top_k)
-            cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals))  # Transform the best individual list to a dictionary format
-            display_cfe_comparison(self.inverse_transformed_x, cfe_with_feature_names)
+        best_individuals = self.best_individuals(population, self.diversity_top_k)
+        cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
+        display_cfe_comparison(self.inverse_transformed_x, cfe_with_feature_names)
             accepted = self.ask_user_acceptance()
             
             while not accepted:

@@ -4,6 +4,10 @@ from sklearn.linear_model import LogisticRegression
 import pandas as pd
 from prettytable import PrettyTable
 
+# transform a single individual from the original space to the scaled space
+def transform_individual(individual, scaler):
+    return scaler.transform(individual.reshape(1, -1))
+
 # Inverse transform a scaled individual back to the original space
 def inverse_transform_individual(scaled_individual, scaler, feature_columns):
     if len(scaled_individual) != len(feature_columns):

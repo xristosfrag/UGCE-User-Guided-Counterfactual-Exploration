@@ -116,8 +116,8 @@ class UGCE:
         """           
         self.x = x
         ## get the scaled individual for the original instance x to use it as a reference for the new individual
-        self.inverse_transformed_x = inverse_transform_individual(self.x, self.scaler, self.feature_columns)
-        print(f"Explaining instance {self.inverse_transformed_x}")
+        self.inverse_transformed_x_indexes, self.inverse_transformed_x_features = inverse_transform_individual(self.x, self.scaler, self.feature_columns)
+        print(f"Explaining instance {self.inverse_transformed_x_features}")
         self.diversity_top_k = diversity_top_k
         self.evaluation = evaluation
         self.dynamic_constraints = dynamic_constraints
@@ -175,7 +175,7 @@ class UGCE:
         for attribute_index, value in enumerate(x_prime):
             if attribute_index in self.immutables:
                 # Feature is immutable, reward more if unchanged, penalize more if changed
-                if x_prime[attribute_index] == self.x[attribute_index]:
+                if x_prime[attribute_index] == self.inverse_transformed_x_indexes[attribute_index]:
                     reward += 100  # Larger reward for immutable feature remaining unchanged
                     if verbose:
                         print("Feature {} is immutable and unchanged. Reward: {}".format(attribute_index, reward))

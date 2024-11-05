@@ -13,7 +13,7 @@ def inverse_transform_individual(scaled_individual, scaler, feature_columns):
     if len(scaled_individual) != len(feature_columns):
         raise ValueError(f"Expected feature length: {len(feature_columns)}, got: {len(scaled_individual)}. Please check your feature selection pipeline.")
     original_individual = scaler.inverse_transform(scaled_individual.reshape(1, -1))
-    return pd.DataFrame(original_individual, columns=feature_columns).iloc[0].to_dict()
+    return original_individual[0], pd.DataFrame(original_individual, columns=feature_columns).iloc[0].to_dict()
 
 # Scale user-provided constraints from original space to scaled space
 def scale_constraints(original_constraints, scaler, feature_columns):

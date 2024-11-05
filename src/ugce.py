@@ -106,7 +106,7 @@ class UGCE:
     def explain_instance(self, x, constraints=None, immutables=None,\
         diversity_top_k=1, evaluation=False, dynamic_constraints=False,\
         initial_population_variability=0.2, data_distribution=True,\
-            seed_number=42,\
+            seed_number=42, population_size_dynamic=10,\
             num_generations=50, population_size=50, num_parents=10,\
             selection_method="tournament", tournsize=3,\
             early_stopping_iterations=3, elite_ratio=0.1, \
@@ -129,6 +129,7 @@ class UGCE:
         self.data_distribution = data_distribution
         
         self.seed_number = seed_number
+        self.population_size_dynamic = population_size_dynamic
         self.seed_update_number = 0
         self.num_generations = num_generations
         self.population_size = population_size
@@ -151,7 +152,7 @@ class UGCE:
         self.immutables = immutables if immutables else []
         self.setup_constraints()
         best_individuals = self.evolve()
-        print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(best_individuals.genes, self.model)}")
+        print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
         return best_individuals
 
     def distance(self, x_prime):
@@ -175,11 +176,11 @@ class UGCE:
             if attribute_index in self.immutables:
                 # Feature is immutable, reward more if unchanged, penalize more if changed
                 if x_prime[attribute_index] == self.x[attribute_index]:
-                    reward += 30  # Larger reward for immutable feature remaining unchanged
+                    reward += 100  # Larger reward for immutable feature remaining unchanged
                     if verbose:
                         print("Feature {} is immutable and unchanged. Reward: {}".format(attribute_index, reward))
                 else:
-                    penalty += 30  # Larger penalty for immutable feature changing
+                    penalty += 10000  # Larger penalty for immutable feature changing
                     if verbose:
                         print("Feature {} is immutable and changed. Penalty: {}".format(attribute_index, penalty))
             else:
@@ -189,12 +190,12 @@ class UGCE:
                 lower, upper = self.constraints[attribute_index]
                 if lower <= x_prime[attribute_index] <= upper:
                     # Reward if the feature is within the bounds
-                    reward += 30
+                    reward += 100
                     if verbose:
                         print("Feature {} is within bounds. Reward: {}".format(attribute_index, reward))
                 else:
                     # Apply penalty if the feature is outside the bounds
-                    penalty += abs(x_prime[attribute_index] - lower) if x_prime[attribute_index] < lower else abs(x_prime[attribute_index] - upper)
+                    penalty += 100 * abs(x_prime[attribute_index] - lower) if x_prime[attribute_index] < lower else abs(x_prime[attribute_index] - upper)
                     if verbose:
                         print("Feature {} is outside bounds. Penalty: {}".format(attribute_index, penalty))
 
@@ -422,10 +423,10 @@ class UGCE:
             for ind in population:
                 ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes)
             
-    def population(self):
+    def population(self, population_size=100):
         population = []
         unique_individuals = set()
-        while len(population) < self.population_size:
+        while len(population) < population_size:
             new_individual = self.generate_individual()
             genes_tuple = tuple(new_individual.genes)
             if genes_tuple not in unique_individuals:
@@ -435,7 +436,7 @@ class UGCE:
 
     def evolve(self):
         # print("Initial seed number: ", self.seed_number + self.seed_update_number)
-        population = self.population()
+        population = self.population(self.population_size)
         print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
         
         self.fitness_assignment(population)        
@@ -551,13 +552,36 @@ class UGCE:
             while not accepted:
                 # Update constraints based on user input
                 self.get_updated_constraints()
-                
+
+                for ind in population:
+                    ind.fitness = None
+
+                ## Just create 1 individual that adheres to the new constraints
+                new_population = self.population(population_size=self.population_size_dynamic)
+
+                ## get the fitness of the new individual
+                self.fitness_assignment(new_population)
+                ## print the fitness of the best new population
+                print(f"Best fitness of the new population: {max(new_population, key=lambda ind: ind.fitness).fitness}")
+
+                ## now add this individual to the population 
+                population.extend(new_population)
+                                
                 # Update the fitness values based on the new constraints
                 self.fitness_assignment(population, clear_fitness=True)
+
+                # and remove the worst individual cause we just added a new one
+                population = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:-self.population_size_dynamic]
+
                 
                 print(f"Constraints: {self.constraints}")
                 print(f"Immutable features: {self.immutables}")
+                start_time = time()
+                self.cxpb = 0.9
+                self.mutpb = 0.8
+                self.elite_ratio = 0.1
                 population = generations(population, 30, max_fitness)
+                print(f"Time taken for dynamic constraint placement: {time() - start_time:.2f} seconds")
                 print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
                 best_individuals = self.best_individuals(population, self.diversity_top_k)
                 cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
@@ -566,7 +590,6 @@ class UGCE:
                 accepted = self.ask_user_acceptance()
             return best_individuals
         else:
-            best_individuals = self.best_individuals(population, self.diversity_top_k)
             return best_individuals
         
     def identical_individuals_percentage(self, population):

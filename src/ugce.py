@@ -202,11 +202,11 @@ class UGCE:
         # Return both the penalty and the reward
         return penalty, reward
    
-    def evaluate(self, individual):            
+    def evaluate(self, individual, verbose=False):            
         y_prime = f_model(transform_individual(np.array(individual), self.scaler), self.model)
         d = self.distance(individual)
         s = self.sparsity(individual)
-        penalty, reward = self.violation(individual)
+        penalty, reward = self.violation(individual, verbose=verbose)
         if y_prime == self.original_prediction:
             penalty += 10000
         else:

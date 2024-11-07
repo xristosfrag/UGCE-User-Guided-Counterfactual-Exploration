@@ -1,11 +1,12 @@
-1. Global random seed. same solution each time
-1. Ensure Selection Methods are correct
+1. Global random seed. same solution each time                                              OK
+1. Variant initial population                                                               OK
+1. Change parameters when updating constraints?                                             OK
+1. enforce new individuals creation trhough crossover and mutation?                         OK
 
 
-2. Variant initial population (chech if it can be done using the toolbox calls or not)
+2.Compare it time, step 2 of iea vs step 1 of iea.                                          OK
+    2.1 Do the same with competitors
+    2.2 Compare the distance of step 2 when it is being done dyunamically and from scratch
+
+3. Ensure Selection Methods are correct
 3. minimum/maximum value at fitness function. Then update it properly
-
-4. Change parameters when updating constraints? enforce new individuals creation trhough crossover and mutation?
-
-5. Compare it time, step 2 of iea vs step 1 of iea. Do the same with competitors
-6. Compare the distance of step 2 when it is being done dyunamically and from scratch

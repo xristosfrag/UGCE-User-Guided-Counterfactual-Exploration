@@ -410,7 +410,7 @@ class UGCE:
                     individual.genes[i] = new_value
         return individual
     
-    def fitness_assignment(self, population, clear_fitness=False):
+    def fitness_assignment(self, population, clear_fitness=False, verbose=False):
         """
         Assign fitness values to the population based on the evaluation function.
         
@@ -421,10 +421,10 @@ class UGCE:
         if clear_fitness:
             for ind in population: # recalculate the fitness for the entire population
                 ind.fitness = None
-                ind.fitness = self.evaluate(ind.genes)
+                ind.fitness = self.evaluate(ind.genes, verbose=verbose)
         else:
             for ind in population:
-                ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes)
+                ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes, verbose=verbose)
             
     def population(self, population_size=100):
         population = []

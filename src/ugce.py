@@ -439,16 +439,6 @@ class UGCE:
 
     def evolve(self):
         # print("Initial seed number: ", self.seed_number + self.seed_update_number)
-        population = self.population(self.population_size)
-        print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
-        
-        self.fitness_assignment(population)        
-        print(f"Constraints: {self.constraints}")
-        print(f"Immutable features: {self.immutables}")
-             
-        max_fitness, avg_fitness = self.max_avg_fitness(population)
-        print(f"Initial population average fitness: {avg_fitness}, max fitness: {max_fitness}")
-        best_fitness = float("-inf")
         
         def generations(population, num_generations, best_fitness):
             print("Starting evolution...")
@@ -509,7 +499,7 @@ class UGCE:
                 
                 # Evaluate the fitness of the offspring
                 self.fitness_assignment(offspring)
-                print(f"Population size: {len(population)}, offspring size: {len(offspring)}")
+                print(f"    Population size: {len(population)}, offspring size: {len(offspring)}")
 
                 # Ensure only the needed number of offspring are retained
                 if self.elite_ratio > 0:
@@ -522,10 +512,7 @@ class UGCE:
                     ## keep the best individuals from the current population and the offspring
                     population = sorted(population + offspring, key=lambda ind: ind.fitness, reverse=True)[:self.population_size]
 
-                print("Final population size: ", len(population))
-                best_individual = max(population, key=lambda ind: ind.fitness)
-                print(f"Generation {gen}: Best fitness {best_individual.fitness}")
-                    
+                print(" Final population size: ", len(population))
                 current_best_fitness, avg_fitness = self.max_avg_fitness(population)
                 print(f"    Average fitness: {avg_fitness}, max fitness: {current_best_fitness}")
                 # Track improvement
@@ -533,7 +520,7 @@ class UGCE:
                     best_fitness = current_best_fitness
                     generations_without_improvement = 0
                 else:
-                    generations_without_improvement += 1
+                    generations_without_improvement += 1                    
             print("\nEvolution complete.")
             return population
         

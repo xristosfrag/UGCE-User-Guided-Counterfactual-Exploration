@@ -248,7 +248,7 @@ class UGCE:
             
             # If the feature is immutable, keep its original value
             if i in self.immutables:
-                genes.append(self.inverse_transformed_x[feature_name])
+                genes.append(self.inverse_transformed_x_features[feature_name])
                 continue
             
             # For categorical features, randomly select one of the known unique values
@@ -267,7 +267,7 @@ class UGCE:
                 ## if skip the feature change then keep the original values for the entire group
                 if skip_feature_change_prob > self.initial_population_variability:
                     # Keep original values for the entire group
-                    genes.extend([self.inverse_transformed_x[f] for f in one_hot_group])
+                    genes.extend([self.inverse_transformed_x_features[f] for f in one_hot_group])
                     skip_indices.update([list(self.feature_columns).index(f) for f in one_hot_group])
                     continue
                 
@@ -286,7 +286,7 @@ class UGCE:
             else:
                 # Randomly decide whether to change this feature or not
                 if skip_feature_change_prob > self.initial_population_variability:
-                    genes.append(self.inverse_transformed_x[feature_name])
+                    genes.append(self.inverse_transformed_x_features[feature_name])
                     continue
                 
                 if self.constraints.get(i):  # Check if specific constraints are provided

@@ -524,12 +524,48 @@ class UGCE:
             print("\nEvolution complete.")
             return population
         
-        population = generations(population, self.num_generations, best_fitness)
-        print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
+        regeneration_tries = 0
+        while 1:
+            population = self.population(self.population_size)
+            print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
+            
+            self.fitness_assignment(population)
+            print(f"Constraints: {self.constraints}")
+            print(f"Immutable features: {self.immutables}")
+                
+            max_fitness, avg_fitness = self.max_avg_fitness(population)
+            print(f"Initial population average fitness: {avg_fitness}, max fitness: {max_fitness}")
+            best_fitness = float("-inf")
+            population = generations(population, self.num_generations, best_fitness)
+            regeneration_tries += 1
+            best_individuals = self.best_individuals(population, self.diversity_top_k)
+            
+            print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
 
-        best_individuals = self.best_individuals(population, self.diversity_top_k)
+            if self.original_prediction == f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)\
+            and regeneration_tries < self.regeneration_tries:
+                print("No solution found, starting all over again with different initial population.")
+                self.seed_number += 1
+                continue
+            else:
+                break   
+            # break     
+        
+        # population = self.population(self.population_size)
+        # print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")    
+        # self.fitness_assignment(population)        
+        # print(f"Constraints: {self.constraints}")
+        # print(f"Immutable features: {self.immutables}")
+        # max_fitness, avg_fitness = self.max_avg_fitness(population)
+        # print(f"Initial population average fitness: {avg_fitness}, max fitness: {max_fitness}")
+        # best_fitness = float("-inf")
+        # population = generations(population, self.num_generations, best_fitness)
+        # best_individuals = self.best_individuals(population, self.diversity_top_k)
+        
+        print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
+        # best_individuals = self.best_individuals(population, self.diversity_top_k)
         cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
-        display_cfe_comparison(self.inverse_transformed_x, cfe_with_feature_names)
+        display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
         print()
     
         # If dynamic constraints are enabled, ask the user for acceptance and update constraints
@@ -542,40 +578,59 @@ class UGCE:
             while not accepted:
                 # Update constraints based on user input
                 self.get_updated_constraints()
-
-                for ind in population:
-                    ind.fitness = None
-
-                ## Just create 1 individual that adheres to the new constraints
-                new_population = self.population(population_size=self.population_size_dynamic)
-
-                ## get the fitness of the new individual
-                self.fitness_assignment(new_population)
-                ## print the fitness of the best new population
-                print(f"Best fitness of the new population: {max(new_population, key=lambda ind: ind.fitness).fitness}")
-
-                ## now add this individual to the population 
-                population.extend(new_population)
-                                
-                # Update the fitness values based on the new constraints
-                self.fitness_assignment(population, clear_fitness=True)
-
-                # and remove the worst individual cause we just added a new one
-                population = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:-self.population_size_dynamic]
-
+                regeneration_tries = 0
                 
-                print(f"Constraints: {self.constraints}")
-                print(f"Immutable features: {self.immutables}")
-                start_time = time()
-                self.cxpb = 0.9
-                self.mutpb = 0.8
-                self.elite_ratio = 0.1
-                population = generations(population, 30, max_fitness)
-                print(f"Time taken for dynamic constraint placement: {time() - start_time:.2f} seconds")
+                while 1:
+                    print("SEED NUMBER:  ",self.seed_number)
+                    # Update the fitness values based on the new constraints
+                    self.fitness_assignment(population, clear_fitness=True)
+                        
+                    if self.population_size_dynamic >= 0:
+                        ## Just create 1 individual that adheres to the new constraints
+                        new_population = self.population(population_size=self.population_size_dynamic)
+
+                        ## get the fitness of the new individual
+                        self.fitness_assignment(new_population)
+                        ## print the fitness of the best new population
+                        print(f"    !! Best fitness of the new population: {max(new_population, key=lambda ind: ind.fitness).fitness}")
+
+                        ## now add this individual to the population 
+                        population.extend(new_population)
+                                        
+                        # Update the fitness values based on the new constraints
+                        self.fitness_assignment(population, clear_fitness=True)
+                        print(f"    !! Best fitness of the new population: {max(new_population, key=lambda ind: ind.fitness).fitness}")
+
+                        # and remove the worst individual cause we just added a new one
+                        population = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:-self.population_size_dynamic]
+                        
+                        # count the population size
+                        print(f"Population size: {len(population)}")
+                    
+                    print(f"Constraints: {self.constraints}")
+                    print(f"Immutable features: {self.immutables}")
+                    start_time = time()
+                    self.cxpb = 0.9
+                    self.mutpb = 0.8
+                    self.elite_ratio = 0.1
+                    population = generations(population, 30, max_fitness)
+                    best_individuals = self.best_individuals(population, self.diversity_top_k)
+                    print(f"Time taken for dynamic constraint placement: {time() - start_time:.2f} seconds")
+                    print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
+
+                    if self.original_prediction == f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)\
+                                    and regeneration_tries < self.regeneration_tries:
+                        print("No solution found, starting all over again with different initial population.")
+                        self.seed_number += 1
+                        self.set_seed(self.seed_number)
+                        regeneration_tries += 1
+                        continue
+                    else:
+                        break     
+                
                 print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
-                best_individuals = self.best_individuals(population, self.diversity_top_k)
                 cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
-                display_cfe_comparison(self.inverse_transformed_x, cfe_with_feature_names)
+                display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
                 print()
                 accepted = self.ask_user_acceptance()
             return best_individuals

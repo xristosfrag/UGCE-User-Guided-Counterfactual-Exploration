@@ -196,7 +196,7 @@ class UGCE:
                         print("Feature {} is within bounds. Reward: {}".format(attribute_index, reward))
                 else:
                     # Apply penalty if the feature is outside the bounds
-                    penalty += 100 * abs(x_prime[attribute_index] - lower) if x_prime[attribute_index] < lower else abs(x_prime[attribute_index] - upper)
+                    penalty += 10000 * abs(x_prime[attribute_index] - lower) if x_prime[attribute_index] < lower else abs(x_prime[attribute_index] - upper)
                     if verbose:
                         print("Feature {} is outside bounds. Penalty: {}".format(attribute_index, penalty))
 

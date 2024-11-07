@@ -1,0 +1,102 @@
+Explaining instance {'sex': 1.0, 'age': 23.0, 'juv_fel_count': 0.0, 'juv_misd_count': 0.0, 'juv_other_count': 0.0, 'priors_count': 3.0, 'c_charge_degree': 0.0, 'race_0': 1.0, 'race_1': 0.0, 'race_2': 0.0, 'race_3': 0.0, 'race_4': 0.0, 'race_5': 0.0}
+    Diversity: 100.00% unique individuals
+Constraints: {}
+Immutable features: [0, 1, 7, 8, 9, 10, 11, 12, 6]
+Initial population average fitness: -9138.48487477879, max fitness: -9126.464610366815
+Starting evolution...
+Generation: 0
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 0: Best fitness -9126.464610366815
+    Average fitness: -9138.37934194668, max fitness: -9126.464610366815
+Generation: 1
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 1: Best fitness -9126.142772946785
+    Average fitness: -9132.011551629608, max fitness: -9126.142772946785
+Generation: 2
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 2: Best fitness -9126.142772946785
+    Average fitness: -9130.959695018691, max fitness: -9126.142772946785
+Generation: 3
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 3: Best fitness -9126.142772946785
+    Average fitness: -9129.553463125128, max fitness: -9126.142772946785
+Generation: 4
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 4: Best fitness -9125.121157835767
+    Average fitness: -9130.06219428665, max fitness: -9125.121157835767
+Generation: 5
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 5: Best fitness -9125.121157835767
+    Average fitness: -9129.644830362928, max fitness: -9125.121157835767
+Generation: 6
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 6: Best fitness -9125.016208080466
+    Average fitness: -9129.184137803159, max fitness: -9125.016208080466
+Generation: 7
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 7: Best fitness -9125.016208080466
+    Average fitness: -9130.114902112364, max fitness: -9125.016208080466
+Generation: 8
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 8: Best fitness 1875.0639666926256
+    Average fitness: -9074.520264558758, max fitness: 1875.0639666926256
+Generation: 9
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 9: Best fitness 1875.0639666926256
+    Average fitness: -9075.37492378995, max fitness: 1875.0639666926256
+Generation: 10
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 10: Best fitness 1875.0639666926256
+    Average fitness: -5939.291646732411, max fitness: 1875.0639666926256
+Generation: 11
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 11: Best fitness 1875.0639666926256
+    Average fitness: -2584.5818734966915, max fitness: 1875.0639666926256
+Generation: 12
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 12: Best fitness 1875.0639666926256
+    Average fitness: -1868.6110727639036, max fitness: 1875.0639666926256
+Generation: 13
+Population size: 200, offspring size: 140
+Final population size:  200
+Generation 13: Best fitness 1875.0639666926256
+    Average fitness: -2309.6094231442166, max fitness: 1875.0639666926256
+Stopping early due to lack of fitness improvement.
+
+Evolution complete.
+    Diversity: 52.00% unique individuals
+
+Comparison of Initial Instance and Proposed CFE:
++-----------------+----------------+--------------+--------+
+| Feature         | Original Value | Proposed CFE | Change |
++-----------------+----------------+--------------+--------+
+| sex             | 1.0            | 1.0          |        |
+| age             | 23.0           | 23.0         |        |
+| juv_fel_count   | 0.0            | 0.0          |        |
+| juv_misd_count  | 0.0            | 0.0          |        |
+| juv_other_count | 0.0            | 0.0          |        |
+| priors_count    | 3.0            | 0.0          | -3.0   |
+| c_charge_degree | 0.0            | 0.0          |        |
+| race_0          | 1.0            | 1.0          |        |
+| race_1          | 0.0            | 0.0          |        |
+| race_2          | 0.0            | 0.0          |        |
+| race_3          | 0.0            | 0.0          |        |
+| race_4          | 0.0            | 0.0          |        |
+| race_5          | 0.0            | 0.0          |        |
++-----------------+----------------+--------------+--------+
+
+Best cfe is: [ 1. 23.  0.  0.  0.  0.  0.  1.  0.  0.  0.  0.  0.], guaranteed to alter the decision of the model from 0 to: 1
+Time taken (constraints from scratch): 0.85 seconds

@@ -107,13 +107,13 @@ class UGCE:
         diversity_top_k=1, evaluation=False, dynamic_constraints=False,\
         initial_population_variability=0.2, data_distribution=True,\
             seed_number=42, population_size_dynamic=10,\
-            num_generations=50, population_size=50, num_parents=10,\
+            num_generations=50, population_size=50, regeneration_tries=2, num_parents=10,\
             selection_method="tournament", tournsize=3,\
             early_stopping_iterations=3, elite_ratio=0.1, \
              lamda1=1, lamda2=1, lamda3=1, lamda4=1, cxpb=0.5, crossover_points=3, mutpb=0.2):
         """
         Explain the instance by evolving counterfactual examples.
-        """           
+        """
         self.x = x
         ## get the scaled individual for the original instance x to use it as a reference for the new individual
         self.inverse_transformed_x_indexes, self.inverse_transformed_x_features = inverse_transform_individual(self.x, self.scaler, self.feature_columns)
@@ -133,6 +133,7 @@ class UGCE:
         self.seed_update_number = 0
         self.num_generations = num_generations
         self.population_size = population_size
+        self.regeneration_tries = regeneration_tries
         self.num_parents = num_parents
         self.selection_method = selection_method
         self.tournsize = tournsize

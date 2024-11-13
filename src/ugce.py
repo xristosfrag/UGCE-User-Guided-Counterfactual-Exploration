@@ -549,21 +549,8 @@ class UGCE:
                 continue
             else:
                 break   
-            # break     
-        
-        # population = self.population(self.population_size)
-        # print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")    
-        # self.fitness_assignment(population)        
-        # print(f"Constraints: {self.constraints}")
-        # print(f"Immutable features: {self.immutables}")
-        # max_fitness, avg_fitness = self.max_avg_fitness(population)
-        # print(f"Initial population average fitness: {avg_fitness}, max fitness: {max_fitness}")
-        # best_fitness = float("-inf")
-        # population = generations(population, self.num_generations, best_fitness)
-        # best_individuals = self.best_individuals(population, self.diversity_top_k)
         
         print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
-        # best_individuals = self.best_individuals(population, self.diversity_top_k)
         cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
         display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
         print()

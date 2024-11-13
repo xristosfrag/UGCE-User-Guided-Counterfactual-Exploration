@@ -560,7 +560,7 @@ class UGCE:
             print("Dynamic constraints enabled.")
             best_individuals = self.best_individuals(population, self.diversity_top_k)
             cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
-            accepted = self.ask_user_acceptance()            
+            accepted = self.ask_user_acceptance()  
             
             while not accepted:
                 # Update constraints based on user input
@@ -572,21 +572,21 @@ class UGCE:
                     # Update the fitness values based on the new constraints
                     self.fitness_assignment(population, clear_fitness=True)
                         
-                    if self.population_size_dynamic >= 0:
+                    if self.population_size_dynamic > 0:
                         ## Just create 1 individual that adheres to the new constraints
                         new_population = self.population(population_size=self.population_size_dynamic)
 
                         ## get the fitness of the new individual
                         self.fitness_assignment(new_population)
                         ## print the fitness of the best new population
-                        print(f"    !! Best fitness of the new population: {max(new_population, key=lambda ind: ind.fitness).fitness}")
+                        print(f"    !! Best fitness of the brand new population: {max(new_population, key=lambda ind: ind.fitness).fitness}")
 
                         ## now add this individual to the population 
                         population.extend(new_population)
                                         
                         # Update the fitness values based on the new constraints
                         self.fitness_assignment(population, clear_fitness=True)
-                        print(f"    !! Best fitness of the new population: {max(new_population, key=lambda ind: ind.fitness).fitness}")
+                        print(f"    !! Best fitness of the updated population: {max(new_population, key=lambda ind: ind.fitness).fitness}")
 
                         # and remove the worst individual cause we just added a new one
                         population = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:-self.population_size_dynamic]

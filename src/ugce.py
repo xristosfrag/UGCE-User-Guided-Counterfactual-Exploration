@@ -352,15 +352,27 @@ class UGCE:
         return Individual(offspring1), Individual(offspring2)
 
     def mutate_individual(self, individual):
+        skip_mutation_indexes = []
         for i in range(len(self.feature_columns)):
+            if i in skip_mutation_indexes:
+                continue
             self.seed_update_number += 1
             self.set_seed(self.seed_number + self.seed_update_number)
             # print(f"Mutation per attribute Seed number: {self.seed_number + self.seed_update_number}")
             if random.random() < self.mutpb:
                 feature_name = self.feature_columns[i]
                 if i in self.immutables:
-                    continue
-                if feature_name in self.categorical_columns:
+                    if feature_name in self.one_hot_encode_features:
+                        one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
+                        skip_mutation_indexes += [list(self.feature_columns).index(f) for f in one_hot_group]
+                        for index in skip_mutation_indexes:
+                            individual.genes[index] = self.inverse_transformed_x_indexes[index]
+                    elif self.inverse_transformed_x_indexes[i] == individual.genes[i]:
+                        continue
+                    else:
+                        individual.genes[i] = self.inverse_transformed_x_indexes[i]
+                        continue
+                elif feature_name in self.categorical_columns:
                     possible_values = self.features_ranges[feature_name]
                     original_value = individual.genes[i]
                     new_value = original_value

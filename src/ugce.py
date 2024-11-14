@@ -110,7 +110,7 @@ class UGCE:
             num_generations=50, population_size=50, regeneration_tries=2, num_parents=10,\
             selection_method="tournament", tournsize=3,\
             early_stopping_iterations=3, elite_ratio=0.1, \
-             lamda1=1, lamda2=1, lamda3=1, lamda4=1, lambda5=1, cxpb=0.5, crossover_points=3, mutpb=0.2):
+             lambda1=1, lambda2=1, lambda3=1, lambda4=1, lambda5=1, cxpb=0.5, crossover_points=3, mutpb=0.2):
         """
         Explain the instance by evolving counterfactual examples.
         """
@@ -138,11 +138,11 @@ class UGCE:
         self.selection_method = selection_method
         self.tournsize = tournsize
         
-        self.lamda1 = lamda1
-        self.lamda2 = lamda2
-        self.lamda3 = lamda3
-        self.lamda4 = lamda4
-        self.lamda5 = lambda5
+        self.lambda1 = lambda1
+        self.lambda2 = lambda2
+        self.lambda3 = lambda3
+        self.lambda4 = lambda4
+        self.lambda5 = lambda5
         self.cxpb = cxpb
         self.crossover_points = crossover_points
         self.mutpb = mutpb
@@ -216,7 +216,7 @@ class UGCE:
             y_score += 10000
         if verbose:
             print(f"Distance: {d}, Sparsity: {s}, Immutable_score: {immutable_score}, Ranges_score: {ranges_score}")
-        return - self.lamda1 * d - self.lamda2 * s + self.lambda3 * y_score + self.lamda4 * immutable_score + self.lamda5 * ranges_score
+        return - self.lambda1 * d - self.lambda2 * s + self.lambda3 * y_score + self.lambda4 * immutable_score + self.lambda5 * ranges_score
     
     def generate_individual(self):
         """

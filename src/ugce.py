@@ -106,7 +106,7 @@ class UGCE:
     def explain_instance(self, x, constraints=None, immutables=None,\
         diversity_top_k=1, evaluation=False, dynamic_constraints=False,\
         initial_population_variability=0.2, data_distribution=True,\
-            seed_number=42, population_size_dynamic=10,\
+            seed_number=42, fix_population=True, population_size_dynamic=10,\
             num_generations=50, population_size=50, regeneration_tries=2, num_parents=10,\
             selection_method="tournament", tournsize=3,\
             early_stopping_iterations=3, elite_ratio=0.1, \
@@ -129,6 +129,7 @@ class UGCE:
         self.data_distribution = data_distribution
         
         self.seed_number = seed_number
+        self.fix_population = fix_population
         self.population_size_dynamic = population_size_dynamic
         self.seed_update_number = 0
         self.num_generations = num_generations
@@ -569,10 +570,21 @@ class UGCE:
                 regeneration_tries = 0
                 
                 while 1:
+                    self.seed_number += 1
                     print("SEED NUMBER:  ",self.seed_number)
+                    print(f"Constraints: {self.constraints}")
+                    print(f"Immutable features: {self.immutables}")
                     # Update the fitness values based on the new constraints
                     self.fitness_assignment(population, clear_fitness=True)
-                        
+                    
+                    max_fitness = max(population, key=lambda ind: ind.fitness).fitness
+                    print(f"    !! Best fitness using the new constraints: {max_fitness}")
+                    if self.fix_population:
+                        population = self.update_population(population)
+                        self.fitness_assignment(population, clear_fitness=True)
+                        max_fitness = max(population, key=lambda ind: ind.fitness).fitness
+                        print(f"    !! Best fitness after fixing the population: {max_fitness}")
+                       
                     if self.population_size_dynamic > 0:
                         ## Just create 1 individual that adheres to the new constraints
                         new_population = self.population(population_size=self.population_size_dynamic)
@@ -600,7 +612,7 @@ class UGCE:
                     start_time = time()
                     self.cxpb = 0.9
                     self.mutpb = 0.8
-                    self.elite_ratio = 0.1
+                    # self.elite_ratio = 0.1
                     population = generations(population, 30, max_fitness)
                     best_individuals = self.best_individuals(population, self.diversity_top_k)
                     print(f"Time taken for dynamic constraint placement: {time() - start_time:.2f} seconds")
@@ -627,6 +639,49 @@ class UGCE:
         else:
             return best_individuals
         
+    def update_population(self, population):
+        ## deepcopy the population
+        population = deepcopy(population)
+        for ind in population:
+            skip_indices = []
+            
+            for i in range(len(self.feature_columns)):
+                if i in skip_indices:
+                    continue
+                feature_name = self.feature_columns[i]
+                
+                if i in self.immutables:    
+                    if feature_name in self.one_hot_encode_features:
+                        one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
+                        skip_indices.extend([list(self.feature_columns).index(f) for f in one_hot_group])
+                        for index in skip_indices:
+                            ind.genes[index] = self.inverse_transformed_x_indexes[index]
+                    elif self.inverse_transformed_x_indexes[i] == ind.genes[i]:
+                        continue
+                    else:
+                        ind.genes[i] = self.inverse_transformed_x_indexes[i]
+                        continue
+                elif feature_name in self.categorical_columns:
+                    continue
+                elif feature_name in self.one_hot_encode_features:
+                    continue
+                else:
+                    if self.constraints.get(i):
+                        if ind.genes[i] == self.inverse_transformed_x_indexes[i]:
+                            continue
+                        else:
+                            lower, upper = self.constraints[i]
+                            if lower < ind.genes[i] < upper:
+                                continue
+                            else:
+                                if self.features_type[feature_name] == 'int':
+                                    ind.genes[i] = random.randint(lower, upper)
+                                else:
+                                    ind.genes[i] = random.uniform(lower, upper)
+                    else:
+                        continue      
+        return population
+    
     def changed_prediction_percentage(self, population):
         """
         Calculate the percentage of individuals that change the model's prediction.

@@ -676,17 +676,17 @@ class UGCE:
                         print(f"Feature '{base_feature_name}' is passed (no new constraints).")
                         break
                     elif user_input == "i":
-                        print(f"Feature '{base_feature_name}' marked as immutable.")
                         for idx in find_indices:
                             if idx not in self.immutables:
                                 self.immutables.append(idx)
+                        print(f"Feature '{base_feature_name}' marked as immutable.")
                         break
                     elif user_input == "ni":
-                        print(f"Feature '{base_feature_name}' is no longer immutable.")
                         ## remove the immutable constraint
                         ## pop the skip indices from the self.immutables
                         for idx in find_indices:
                             self.immutables.remove(idx)                        
+                        print(f"Feature '{base_feature_name}' is no longer immutable.")
                         break
             else:
                 while True:
@@ -699,8 +699,13 @@ class UGCE:
                     
                     # User enters '-' to mark the feature as immutable
                     elif user_input == "i":
-                        print(f"Feature '{feature}' marked as immutable.")
                         self.immutables.append(i)
+                        ## if the feature is in the constraints then remove it
+                        if i in self.constraints:
+                            self.constraints.pop(i)
+                            print(f"Feature '{feature}' marked as immutable. Constraints removed.")
+                        else:
+                            print(f"Feature '{feature}' marked as immutable.")                        
                         break
                     
                     elif user_input == "ni":
@@ -717,6 +722,12 @@ class UGCE:
                                 print("Lower bound cannot be greater than upper bound. Please try again.")
                             else:
                                 self.constraints[i] = (lower, upper)
+                                ## if the feature is in the immutable list then remove it
+                                if i in self.immutables:
+                                    self.immutables.remove(i)
+                                    print(f"Feature '{feature}' set to [{lower}, {upper}] and is no longer immutable.")
+                                else:
+                                    print(f"Feature '{feature}' set to [{lower}, {upper}].")
                                 break
                         except ValueError:
                             print("Invalid input. Please enter two numeric values or '-' to mark as immutable.")

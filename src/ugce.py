@@ -629,12 +629,17 @@ class UGCE:
         - A higher percentage of individuals that change the prediction indicates a successful search for counterfactual explanations.
         - A lower percentage of individuals that change the prediction indicates a failure to find a suitable counterfactual explanation.
         """
-        # Sort the population based on fitness score
-        sorted_population = sorted(population, key=lambda ind: ind.fitness, reverse=True)
-        # Calculate the number of individuals that change the prediction
-        changed_count = sum(1 for ind in sorted_population if f_model(transform_individual(np.array(ind.genes), self.scaler), self.model) != self.original_prediction)
-        # Calculate the percentage of individuals that change the prediction
-        score = (changed_count / len(population)) * 100
+        # Use a set comprehension to keep track of unique individuals based on their genes
+        unique_individuals = {tuple(ind.genes) for ind in population}
+
+        # Calculate the number of unique individuals that change the prediction
+        changed_count = sum(
+            1 for genes in unique_individuals 
+            if f_model(transform_individual(np.array(genes), self.scaler), self.model) != self.original_prediction
+        )
+        
+        # Calculate the percentage of unique individuals that change the prediction
+        score = (changed_count / len(unique_individuals)) * 100
         print(f"Changed prediction count: {changed_count}, percentage: {score:.2f}%")
         return changed_count, score
         

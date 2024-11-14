@@ -110,7 +110,7 @@ class UGCE:
             num_generations=50, population_size=50, regeneration_tries=2, num_parents=10,\
             selection_method="tournament", tournsize=3,\
             early_stopping_iterations=3, elite_ratio=0.1, \
-             lamda1=1, lamda2=1, lamda3=1, lamda4=1, cxpb=0.5, crossover_points=3, mutpb=0.2):
+             lamda1=1, lamda2=1, lamda3=1, lamda4=1, lambda5=1, cxpb=0.5, crossover_points=3, mutpb=0.2):
         """
         Explain the instance by evolving counterfactual examples.
         """
@@ -142,6 +142,7 @@ class UGCE:
         self.lamda2 = lamda2
         self.lamda3 = lamda3
         self.lamda4 = lamda4
+        self.lamda5 = lambda5
         self.cxpb = cxpb
         self.crossover_points = crossover_points
         self.mutpb = mutpb
@@ -170,20 +171,20 @@ class UGCE:
         The immutables are a set of indices of features that are immutable.
         The original_x is the explainee instance.
         """
-        penalty = 0
-        reward = 0
+        immutable_score = 0
+        ranges_score = 0
         
         for attribute_index, value in enumerate(x_prime):
             if attribute_index in self.immutables:
                 # Feature is immutable, reward more if unchanged, penalize more if changed
                 if x_prime[attribute_index] == self.inverse_transformed_x_indexes[attribute_index]:
-                    reward += 100  # Larger reward for immutable feature remaining unchanged
+                    immutable_score += 1000  # Larger reward for immutable feature remaining unchanged
                     if verbose:
-                        print("Feature {} is immutable and unchanged. Reward: {}".format(attribute_index, reward))
+                        print("Feature {} is immutable and unchanged. Reward: {}".format(attribute_index, immutable_score))
                 else:
-                    penalty += 10000  # Larger penalty for immutable feature changing
+                    immutable_score -= 1000  # Larger penalty for immutable feature changing
                     if verbose:
-                        print("Feature {} is immutable and changed. Penalty: {}".format(attribute_index, penalty))
+                        print("Feature {} is immutable and changed. Penalty: {}".format(attribute_index, immutable_score))
             else:
                 if attribute_index not in self.constraints:
                     # No constraints on this feature
@@ -191,46 +192,32 @@ class UGCE:
                 lower, upper = self.constraints[attribute_index]
                 if lower <= x_prime[attribute_index] <= upper:
                     # Reward if the feature is within the bounds
-                    reward += 100
+                    ranges_score += 1000
                     if verbose:
-                        print("Feature {} is within bounds. Reward: {}".format(attribute_index, reward))
+                        print("Feature {} is within bounds. Reward: {}".format(attribute_index, ranges_score))
                 else:
                     # Apply penalty if the feature is outside the bounds
-                    penalty += 10000 * abs(x_prime[attribute_index] - lower) if x_prime[attribute_index] < lower else abs(x_prime[attribute_index] - upper)
+                    ranges_score += 1000 * abs(x_prime[attribute_index] - lower) if x_prime[attribute_index] < lower else abs(x_prime[attribute_index] - upper)
                     if verbose:
-                        print("Feature {} is outside bounds. Penalty: {}".format(attribute_index, penalty))
+                        print("Feature {} is outside bounds. Penalty: {}".format(attribute_index, ranges_score))
 
         # Return both the penalty and the reward
-        return penalty, reward
+        return immutable_score, ranges_score
    
     def evaluate(self, individual, verbose=False):
         y_prime = f_model(transform_individual(np.array(individual), self.scaler), self.model)
         d = self.distance(individual)
         s = self.sparsity(individual)
-        penalty, reward = self.violation(individual, verbose=verbose)
+        immutable_score, ranges_score = self.violation(individual, verbose=verbose)
+        y_score = 0
         if y_prime == self.original_prediction:
-            penalty += 10000
+            y_score -= 10000
         else:
-            reward += 1000
+            y_score += 10000
         if verbose:
-            print(f"Distance: {d}, Sparsity: {s}, Penalty: {penalty}, Reward: {reward}")
-        return - self.lamda1 * d - self.lamda2 * s - self.lamda3 * penalty + self.lamda4 * reward
+            print(f"Distance: {d}, Sparsity: {s}, Immutable_score: {immutable_score}, Ranges_score: {ranges_score}")
+        return - self.lamda1 * d - self.lamda2 * s + self.lambda3 * y_score + self.lamda4 * immutable_score + self.lamda5 * ranges_score
     
-    """
-    # Minimum and maximum value for the evaluation function
-    # Minimum: All features are the same as the original instance, within the constraints
-    # Maximum: All features are different from the original instance, within the constraints
-
-    # d_max = sqrt(sum((x_i - x'_i)^2)) for all i = sqrt(len(x))
-    # s_max = len(x)
-    # v_max = sum(abs(x_i - x'_i)) for all i
-    # penalty_max = 100
-    # reward_max = 5 * len(immutables)
-
-    # Evaluation function:
-    Minimum value: -d_max
-    # """
-
     def generate_individual(self):
         """
         Generate an individual by considering constraints, immutability, and categorical/numerical ranges.

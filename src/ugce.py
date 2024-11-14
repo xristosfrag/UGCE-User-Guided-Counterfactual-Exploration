@@ -536,7 +536,9 @@ class UGCE:
                 continue
             else:
                 break   
-        
+            
+        changed_count, changed_percentage = self.changed_prediction_percentage(population)
+        print(f"    Applicable cfes: {changed_count} ({changed_percentage:.2f}%)")
         print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
         cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
         display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
@@ -602,6 +604,8 @@ class UGCE:
                     else:
                         break     
                 
+                changed_count, changed_percentage = self.changed_prediction_percentage(population)
+                print(f"    Applicable cfes: {changed_count} ({changed_percentage:.2f}%)")
                 print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
                 cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
                 display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
@@ -610,6 +614,29 @@ class UGCE:
             return best_individuals
         else:
             return best_individuals
+        
+    def changed_prediction_percentage(self, population):
+        """
+        Calculate the percentage of individuals that change the model's prediction.
+        
+        ### Inputs:
+        - population: List of Individual instances in the population
+        
+        ### Output:
+        - score: Percentage of individuals that change the model's prediction
+        
+        ### Interpretation:
+        - A higher percentage of individuals that change the prediction indicates a successful search for counterfactual explanations.
+        - A lower percentage of individuals that change the prediction indicates a failure to find a suitable counterfactual explanation.
+        """
+        # Sort the population based on fitness score
+        sorted_population = sorted(population, key=lambda ind: ind.fitness, reverse=True)
+        # Calculate the number of individuals that change the prediction
+        changed_count = sum(1 for ind in sorted_population if f_model(transform_individual(np.array(ind.genes), self.scaler), self.model) != self.original_prediction)
+        # Calculate the percentage of individuals that change the prediction
+        score = (changed_count / len(population)) * 100
+        print(f"Changed prediction count: {changed_count}, percentage: {score:.2f}%")
+        return changed_count, score
         
     def identical_individuals_percentage(self, population):
         """

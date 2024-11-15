@@ -31,9 +31,6 @@ sys.path.append(ugce_dir + get_system_slash() + 'src')
 
 from utils import transform_individual, inverse_transform_individual, f_model, display_cfe_comparison
 
-random.seed(42)
-np.random.seed(42)
-
 class Individual:
     def __init__(self, genes):
         self.genes = genes
@@ -106,7 +103,7 @@ class UGCE:
     def explain_instance(self, x, constraints=None, immutables=None,\
         diversity_top_k=1, evaluation=False, dynamic_constraints=False,\
         initial_population_variability=0.2, data_distribution=True,\
-            seed_number=42, fix_population=True, population_size_dynamic=10,\
+            seed_number=42, fix_population=True, complete_random=True, population_size_dynamic=10,\
             num_generations=50, population_size=50, regeneration_tries=2, num_parents=10,\
             selection_method="tournament", tournsize=3,\
             early_stopping_iterations=3, elite_ratio=0.1, \
@@ -128,7 +125,6 @@ class UGCE:
         self.initial_population_variability = initial_population_variability
         self.data_distribution = data_distribution
         
-        self.seed_number = seed_number
         self.fix_population = fix_population
         self.population_size_dynamic = population_size_dynamic
         self.seed_update_number = 0
@@ -147,8 +143,10 @@ class UGCE:
         self.cxpb = cxpb
         self.crossover_points = crossover_points
         self.mutpb = mutpb
-        # Reset seeds to ensure reproducibility in each call
-        self.set_seed(self.seed_number)
+        if not self.complete_random:
+            self.seed_number = seed_number
+            # Reset seeds to ensure reproducibility in each call
+            self.set_seed(self.seed_number)
         
         self.original_prediction = f_model(x, self.model)
         self.constraints = constraints if constraints else {}
@@ -357,9 +355,10 @@ class UGCE:
         for i in range(len(self.feature_columns)):
             if i in skip_mutation_indexes:
                 continue
-            self.seed_update_number += 1
-            self.set_seed(self.seed_number + self.seed_update_number)
-            # print(f"Mutation per attribute Seed number: {self.seed_number + self.seed_update_number}")
+            if not self.complete_random:
+                self.seed_update_number += 1
+                self.set_seed(self.seed_number + self.seed_update_number)
+                # print(f"Mutation per attribute Seed number: {self.seed_number + self.seed_update_number}")
             if random.random() < self.mutpb:
                 feature_name = self.feature_columns[i]
                 if i in self.immutables:
@@ -417,7 +416,8 @@ class UGCE:
         Args:
             population (list): The population of individuals to evaluate.
         """
-        self.set_seed(self.seed_number)
+        if not self.complete_random:
+            self.set_seed(self.seed_number)
         if clear_fitness:
             for ind in population: # recalculate the fitness for the entire population
                 ind.fitness = None
@@ -451,9 +451,10 @@ class UGCE:
                 if generations_without_improvement >= self.early_stopping_iterations:
                     print("Stopping early due to lack of fitness improvement.")
                     break
-                # Re-seed at the start of each generation
-                self.seed_update_number += gen
-                self.set_seed(self.seed_number + self.seed_update_number)
+                if not self.complete_random:
+                    # Re-seed at the start of each generation
+                    self.seed_update_number += gen
+                    self.set_seed(self.seed_number + self.seed_update_number)
 
                 print(f"Generation: {gen}")
                 if self.elite_ratio > 0:
@@ -475,8 +476,9 @@ class UGCE:
 
                 # Create offspring until the required population size is reached
                 while len(offspring) < offspring_size:
-                    self.seed_update_number += 1
-                    self.set_seed(self.seed_number + self.seed_update_number)
+                    if not self.complete_random:
+                        self.seed_update_number += 1
+                        self.set_seed(self.seed_number + self.seed_update_number)
                     # print(f"Crossover Seed number: {self.seed_number + self.seed_update_number}")
 
                     # Select parent pairs for crossover, allowing repetition of parents
@@ -490,9 +492,10 @@ class UGCE:
                         offspring.extend([parent1, parent2])
 
                 for mutant in offspring:
-                    self.seed_update_number += 1  
-                    self.set_seed(self.seed_number + self.seed_update_number)
-                    # print(f"Mutation Seed number: {self.seed_number + self.seed_update_number}")
+                    if not self.complete_random:
+                        self.seed_update_number += 1  
+                        self.set_seed(self.seed_number + self.seed_update_number)
+                        # print(f"Mutation Seed number: {self.seed_number + self.seed_update_number}")
 
                     if random.random() < self.mutpb:
                         self.mutate_individual(mutant)
@@ -545,7 +548,8 @@ class UGCE:
             if self.original_prediction == f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)\
             and regeneration_tries < self.regeneration_tries:
                 print("No solution found, starting all over again with different initial population.")
-                self.seed_number += 1
+                if not self.complete_random:
+                    self.seed_number += 1
                 continue
             else:
                 break   
@@ -570,8 +574,9 @@ class UGCE:
                 regeneration_tries = 0
                 
                 while 1:
-                    self.seed_number += 1
-                    print("SEED NUMBER:  ",self.seed_number)
+                    if not self.complete_random:
+                        self.seed_number += 1
+                        print("SEED NUMBER:  ",self.seed_number)
                     print(f"Constraints: {self.constraints}")
                     print(f"Immutable features: {self.immutables}")
                     # Update the fitness values based on the new constraints
@@ -621,8 +626,9 @@ class UGCE:
                     if self.original_prediction == f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)\
                                     and regeneration_tries < self.regeneration_tries:
                         print("No solution found, starting all over again with different initial population.")
-                        self.seed_number += 1
-                        self.set_seed(self.seed_number)
+                        if not self.complete_random:
+                            self.seed_number += 1
+                            self.set_seed(self.seed_number)
                         regeneration_tries += 1
                         continue
                     else:

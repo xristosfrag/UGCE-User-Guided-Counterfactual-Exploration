@@ -127,6 +127,7 @@ class UGCE:
         
         self.fix_population = fix_population
         self.population_size_dynamic = population_size_dynamic
+        self.complete_random = complete_random
         self.seed_update_number = 0
         self.num_generations = num_generations
         self.population_size = population_size

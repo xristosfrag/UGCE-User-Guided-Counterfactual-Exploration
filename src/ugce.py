@@ -325,7 +325,6 @@ class UGCE:
         y_prime = f_model(transform_individual(np.array(individual), self.scaler), self.model)
         d = self.distance(individual)
         s = self.sparsity(individual)
-        immutable_score, ranges_score = self.violation(individual, verbose=verbose)
         y_score = 0
         if y_prime == self.original_prediction:
             y_score -= 10000

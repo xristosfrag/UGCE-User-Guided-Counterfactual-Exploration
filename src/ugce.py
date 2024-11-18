@@ -444,7 +444,7 @@ class UGCE:
         # print("Initial seed number: ", self.seed_number + self.seed_update_number)
         
         def generations(population, num_generations, best_fitness):
-            print("Starting evolution...")
+            # print("Starting evolution...")
             # Initialize variables to track improvements
             generations_without_improvement = 0
             elite_count = max(1, int(self.elite_ratio * len(population)))  # Calculate the number of elite individuals
@@ -505,7 +505,7 @@ class UGCE:
                 
                 # Evaluate the fitness of the offspring
                 self.fitness_assignment(offspring)
-                print(f"    Population size: {len(population)}, offspring size: {len(offspring)}")
+                # print(f"    Population size: {len(population)}, offspring size: {len(offspring)}")
 
                 # Ensure only the needed number of offspring are retained
                 if self.elite_ratio > 0:
@@ -518,7 +518,7 @@ class UGCE:
                     ## keep the best individuals from the current population and the offspring
                     population = sorted(population + offspring, key=lambda ind: ind.fitness, reverse=True)[:self.population_size]
 
-                print(" Final population size: ", len(population))
+                # print(" Final population size: ", len(population))
                 current_best_fitness, avg_fitness = self.max_avg_fitness(population)
                 print(f"    Average fitness: {avg_fitness}, max fitness: {current_best_fitness}")
                 # Track improvement
@@ -527,7 +527,7 @@ class UGCE:
                     generations_without_improvement = 0
                 else:
                     generations_without_improvement += 1                    
-            print("\nEvolution complete.")
+            # print("Evolution complete.\n")
             return population
         
         regeneration_tries = 0

@@ -170,7 +170,7 @@ class UGCE:
             selection_method="tournament", tournsize=3,\
             early_stopping_iterations=3, elite_ratio=0.1, \
                 lambda1=1, lambda2=1, lambda3=1, lambda4=1, lambda5=1, cxpb=0.5, crossover_points=3, mutpb=0.2,\
-                updated_constraints=None, automatic_user_acceptance=True):
+                updated_constraints=None, automatic_user_acceptance=True, verbose=False):
         """
         Explain the instances by evolving counterfactual examples.
         """
@@ -205,6 +205,7 @@ class UGCE:
         self.mutpb = mutpb
         self.updated_constraints = updated_constraints
         self.automatic_user_acceptance = automatic_user_acceptance
+        self.verbose = verbose
         if not self.complete_random:
             self.seed_number = seed_number
             self.seed_update_number = 0
@@ -218,46 +219,59 @@ class UGCE:
         
         results_X = {}
         iteration = 0
-        for i, x in enumerate(X):
-            results = {'instance': [],\
-                    'cfes': [],\
-                    'cfes_predictions': [],\
-                    'cfes_distances': [],\
-                    "unique_applicable_cfes": [],\
-                    "elapsed_time": 0}
+        # for i, x in enumerate(tqdm(X, desc="Explaining instances")):
+        for i, x in tqdm(enumerate(X), desc="Explaining instances", total=len(X)):
+
+            results = {"instance": [],\
+                    "best_cfe": [],\
+                    "elapsed_time": 0,\
+                    
+                    "Applicable_cfes_number": 0,\
+                    "cfes_distances": [],\
+                    "unique_applicable_cfes_to_unique_individuals_percentage": 0,\
+                    "cfes": []
+                    }
             
             self.x = x
             ## get the scaled individual for the original instance x to use it as a reference for the new individual
             self.inverse_transformed_x_indexes, self.inverse_transformed_x_features = inverse_transform_individual(self.x, self.scaler, self.feature_columns)
-            print(f"Explaining instance {self.inverse_transformed_x_features}")
+            if iteration>0:
+                print(f"\n\nExplaining instance {self.inverse_transformed_x_features}")
+            else:
+                print(f"Explaining instance {self.inverse_transformed_x_features}")
             self.original_prediction = f_model(x, self.model)
-            best_individuals, elapsed_time = self.evolve()
+            best_individuals, elapsed_time, unique_applicable_cfes_to_unique_individuals_percentage = self.evolve()
 
             if len(best_individuals) == 1:
                 print(f"Best cfe is: {best_individuals[0].genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals[0].genes), self.scaler), self.model)}")
-                results['instance'] = self.inverse_transformed_x_features
-                results['cfes'] = best_individuals[0].genes
-                results['cfes_predictions'] = [f_model(transform_individual(np.array(best_individuals[0].genes), self.scaler), self.model)]
-                print([best_individual.genes for best_individual in best_individuals])
+                results['instance'] = self.inverse_transformed_x_indexes
+                results['best_cfe'] = best_individuals[0].genes
+                results['elapsed_time'] = elapsed_time
+                
+                results['Applicable_cfes_number'] = 1
                 results['cfes_distances'] = [self.distance(best_individuals[0].genes)]
-                results['elapsed_time'] = elapsed_time
+                results['unique_applicable_cfes_to_unique_individuals_percentage'] = 1
+                results['cfes'] = best_individuals[0].genes
             else:
-                print(best_individuals)
+                # print(best_individuals)
                 best_individual = best_individuals[0]
-                print(len(best_individuals), best_individual)
+                # print(len(best_individuals), best_individual)
                 print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
-                results['instance'] = self.inverse_transformed_x_features
-                results['cfes'] = best_individual.genes
-                results['cfes_predictions'] = [f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model) for best_individual in best_individuals]
-                print([best_individual.genes for best_individual in best_individuals])
-                print(type(self.x), [type(best_individual.genes) for best_individual in best_individuals])
-                results['cfes_distances'] = [self.distance(best_individual.genes) for best_individual in best_individuals]
+                results['instance'] = self.inverse_transformed_x_indexes
+                results['best_cfe'] = best_individual.genes
                 results['elapsed_time'] = elapsed_time
-            
+
+                results['Applicable_cfes_number'] = len(best_individuals)
+                results['cfes_distances'] = [self.distance(best_individual.genes) for best_individual in best_individuals]
+                results['unique_applicable_cfes_to_unique_individuals_percentage'] = unique_applicable_cfes_to_unique_individuals_percentage
+                results['cfes'] = [best_individual.genes for best_individual in best_individuals]
             results_X[i] = results
             iteration += 1
-            if iteration == 2:
-                break
+            
+            # remove again the updated constraints
+            self.constraints = {}
+            self.immutables = []
+            
         return results_X
 
     def distance(self, x_prime):

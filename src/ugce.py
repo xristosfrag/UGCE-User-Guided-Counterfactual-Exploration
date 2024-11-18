@@ -560,6 +560,7 @@ class UGCE:
 
     def evolve(self):
         # print("Initial seed number: ", self.seed_number + self.seed_update_number)
+        time_start_not_dynamic = time()
         
         def generations(population, num_generations, best_fitness):
             # print("Starting evolution...")
@@ -570,7 +571,8 @@ class UGCE:
             for gen in range(num_generations):
                 # Termination criterion based on lack of improvement
                 if generations_without_improvement >= self.early_stopping_iterations:
-                    print("Stopping early due to lack of fitness improvement.")
+                    if self.verbose:
+                        print("Stopping early due to lack of fitness improvement.")
                     break
                 if not self.complete_random:
                     # Re-seed at the start of each generation
@@ -638,7 +640,8 @@ class UGCE:
 
                 # print(" Final population size: ", len(population))
                 current_best_fitness, avg_fitness = self.max_avg_fitness(population)
-                print(f"    Average fitness: {avg_fitness}, max fitness: {current_best_fitness}")
+                if self.verbose:
+                    print(f"    Average fitness: {avg_fitness}, max fitness: {current_best_fitness}")
                 # Track improvement
                 if current_best_fitness > best_fitness:
                     best_fitness = current_best_fitness
@@ -651,68 +654,93 @@ class UGCE:
         regeneration_tries = 0
         while 1:
             population = self.population(self.population_size)
-            print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
+            if self.verbose:
+                print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
             
             self.fitness_assignment(population)
-            print(f"Constraints: {self.constraints}")
-            print(f"Immutable features: {self.immutables}")
+            if self.verbose:
+                print(f"Constraints: {self.constraints}")
+                print(f"Immutable features: {self.immutables}")
                 
             max_fitness, avg_fitness = self.max_avg_fitness(population)
-            print(f"Initial population average fitness: {avg_fitness}, max fitness: {max_fitness}")
+            if self.verbose:
+                print(f"Initial population average fitness: {avg_fitness}, max fitness: {max_fitness}")
             best_fitness = float("-inf")
             population = generations(population, self.num_generations, best_fitness)
             regeneration_tries += 1
             best_individuals = self.best_individuals(population, self.diversity_top_k)
             
-            print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
+            if self.verbose:
+                print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
 
             if self.original_prediction == f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)\
             and regeneration_tries < self.regeneration_tries:
-                print("No solution found, starting all over again with different initial population.")
+                if self.verbose:
+                    print("No solution found, starting all over again with different initial population.")
                 if not self.complete_random:
                     self.seed_number += 1
                 continue
             else:
-                break   
+                break
             
-        changed_count, changed_percentage = self.changed_prediction_percentage(population)
-        print(f"    Applicable cfes: {changed_count} ({changed_percentage:.2f}%)")
-        print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
-        cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
-        display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
-        print()
+        unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
+        if self.verbose:
+            print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
+            print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
+            cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
+            display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
+            print()
+
+        elapsed_time_not_dynamic = time() - time_start_not_dynamic
     
         # If dynamic constraints are enabled, ask the user for acceptance and update constraints
         if self.dynamic_constraints:
-            print("Dynamic constraints enabled.")
-            best_individuals = self.best_individuals(population, self.diversity_top_k)
-            cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
-            accepted = self.ask_user_acceptance()  
+            if self.verbose:
+                print("Dynamic constraints enabled.")
+            best_individual = self.best_individuals(population, 0)
+            accepted = self.ask_user_acceptance(best_individual=best_individual)
+            elapsed_time = 0
             
             while not accepted:
                 # Update constraints based on user input
                 self.get_updated_constraints()
+
+                start_time = time()
                 regeneration_tries = 0
                 
                 while 1:
                     if not self.complete_random:
                         self.seed_number += 1
                         print("SEED NUMBER:  ",self.seed_number)
-                    print(f"Constraints: {self.constraints}")
-                    print(f"Immutable features: {self.immutables}")
+                    unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
+                    
+                    if self.verbose:
+                        print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
                     # Update the fitness values based on the new constraints
                     self.fitness_assignment(population, clear_fitness=True)
                     
                     max_fitness = max(population, key=lambda ind: ind.fitness).fitness
-                    print(f"    !! Best fitness using the new constraints: {max_fitness}")
+                    if self.verbose:
+                        print(f"    !! Best fitness using the new constraints: {max_fitness}")
+
+                    unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
+                    if self.verbose:
+                        print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
                     if self.fix_population:
                         population = self.update_population(population)
                         self.fitness_assignment(population, clear_fitness=True)
                         max_fitness = max(population, key=lambda ind: ind.fitness).fitness
-                        print(f"    !! Best fitness after fixing the population: {max_fitness}")
+                        if self.verbose:
+                            print(f"    !! Best fitness after fixing the population: {max_fitness}")
+                        unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
+                    
+                    if self.verbose:
+                        print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
+                        best_individual = self.best_individuals(population, 0)
+                        print(f"    Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}") 
                        
                     if self.population_size_dynamic > 0:
-                        ## Just create 1 individual that adheres to the new constraints
+                        ## Just create |self.population_size_dynamic| individuals that adheres to the new constraints
                         new_population = self.population(population_size=self.population_size_dynamic)
 
                         ## get the fitness of the new individual
@@ -729,42 +757,47 @@ class UGCE:
 
                         # and remove the worst individual cause we just added a new one
                         population = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:-self.population_size_dynamic]
-                        
-                        # count the population size
-                        print(f"Population size: {len(population)}")
                     
-                    print(f"Constraints: {self.constraints}")
-                    print(f"Immutable features: {self.immutables}")
-                    start_time = time()
                     # self.cxpb = 0.9
                     # self.mutpb = 0.8
                     # self.elite_ratio = 0.1
                     population = generations(population, 30, max_fitness)
-                    best_individuals = self.best_individuals(population, self.diversity_top_k)
-                    print(f"Time taken for dynamic constraint placement: {time() - start_time:.2f} seconds")
-                    print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
+                    # best_individuals = self.best_individuals(population, self.diversity_top_k)
+                    best_individual = self.best_individuals(population, 0)
 
-                    if self.original_prediction == f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)\
+                    elapsed_time += (time() - start_time)
+                    if self.verbose:
+                        print(f"Time taken for dynamic constraint placement: {elapsed_time:.2f} seconds")
+                    if self.verbose:
+                        print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
+
+                    if self.original_prediction == f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)\
                                     and regeneration_tries < self.regeneration_tries:
-                        print("No solution found, starting all over again with different initial population.")
+                        if self.verbose:
+                            print("No solution found, starting all over again with different initial population.\n\n")
                         if not self.complete_random:
                             self.seed_number += 1
                             self.set_seed(self.seed_number)
                         regeneration_tries += 1
                         continue
                     else:
-                        break     
+                        break
                 
-                changed_count, changed_percentage = self.changed_prediction_percentage(population)
-                print(f"    Applicable cfes: {changed_count} ({changed_percentage:.2f}%)")
-                print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
-                cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
-                display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
-                print()
-                accepted = self.ask_user_acceptance()
-            return best_individuals
+                if self.verbose:
+                    print(f"Best individual is in the unique applicable CFEs: {best_individual in unique_applicable_cfes}")
+
+                unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
+                if self.verbose:
+                    print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
+                cfe_with_feature_names = dict(zip(self.feature_columns, best_individual.genes))  # Transform the best individual list to a dictionary format
+                if self.verbose:
+                    display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
+                    print()
+                accepted = self.ask_user_acceptance(best_individual=best_individual)
+            return unique_applicable_cfes, elapsed_time, unique_applicable_cfes_to_unique_individuals_percentage
         else:
-            return best_individuals
+            self.population = population
+            return best_individuals, elapsed_time_not_dynamic, unique_applicable_cfes_to_unique_individuals_percentage
         
     def update_population(self, population):
         ## deepcopy the population

@@ -4,6 +4,7 @@ from functools import partial
 from collections import Counter
 from copy import deepcopy
 from time import time
+from tqdm import tqdm
 
 import sys
 import os

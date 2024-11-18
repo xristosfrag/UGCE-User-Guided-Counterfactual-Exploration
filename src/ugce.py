@@ -106,7 +106,8 @@ class UGCE:
             num_generations=50, population_size=50, regeneration_tries=2, num_parents=10,\
             selection_method="tournament", tournsize=3,\
             early_stopping_iterations=3, elite_ratio=0.1, \
-             lambda1=1, lambda2=1, lambda3=1, lambda4=1, lambda5=1, cxpb=0.5, crossover_points=3, mutpb=0.2):
+            lambda1=1, lambda2=1, lambda3=1, lambda4=1, lambda5=1, cxpb=0.5, crossover_points=3, mutpb=0.2,\
+            updated_constraints=None, automatic_user_acceptance=True, verbose=True):
         """
         Explain the instance by evolving counterfactual examples.
         """

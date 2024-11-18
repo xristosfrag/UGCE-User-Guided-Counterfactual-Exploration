@@ -154,6 +154,104 @@ class UGCE:
         best_individuals = self.evolve()
         print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
         return best_individuals
+    
+    def explain_instances(self, X, constraints=None, immutables=None,\
+        diversity_top_k=1, evaluation=False, dynamic_constraints=False,\
+        initial_population_variability=0.2, data_distribution=True,\
+            seed_number=42, fix_population=True, complete_random=True, population_size_dynamic=10,\
+            num_generations=50, population_size=50, regeneration_tries=2, num_parents=10,\
+            selection_method="tournament", tournsize=3,\
+            early_stopping_iterations=3, elite_ratio=0.1, \
+                lambda1=1, lambda2=1, lambda3=1, lambda4=1, lambda5=1, cxpb=0.5, crossover_points=3, mutpb=0.2,\
+                updated_constraints=None, automatic_user_acceptance=True):
+        """
+        Explain the instances by evolving counterfactual examples.
+        """
+        self.X = X
+        self.diversity_top_k = diversity_top_k
+        self.evaluation = evaluation
+        self.dynamic_constraints = dynamic_constraints
+        self.initial_population_variability = initial_population_variability
+        self.num_generations = num_generations
+        self.early_stopping_iterations = early_stopping_iterations
+        self.elite_ratio = elite_ratio # Percentage of individuals to retain from both current and offspring population
+        self.initial_population_variability = initial_population_variability
+        self.data_distribution = data_distribution
+
+        self.fix_population = fix_population
+        self.population_size_dynamic = population_size_dynamic
+        self.complete_random = complete_random
+        self.num_generations = num_generations
+        self.population_size = population_size
+        self.regeneration_tries = regeneration_tries
+        self.num_parents = num_parents
+        self.selection_method = selection_method
+        self.tournsize = tournsize
+
+        self.lambda1 = lambda1
+        self.lambda2 = lambda2
+        self.lambda3 = lambda3
+        self.lambda4 = lambda4
+        self.lambda5 = lambda5
+        self.cxpb = cxpb
+        self.crossover_points = crossover_points
+        self.mutpb = mutpb
+        self.updated_constraints = updated_constraints
+        self.automatic_user_acceptance = automatic_user_acceptance
+        if not self.complete_random:
+            self.seed_number = seed_number
+            self.seed_update_number = 0
+            # Reset seeds to ensure reproducibility in each call
+            self.set_seed(self.seed_number)
+
+        self.original_predictions = {f_model(x, self.model) for x in X}
+        self.constraints = constraints if constraints else {}
+        self.immutables = immutables if immutables else []
+        self.setup_constraints()
+        
+        results_X = {}
+        iteration = 0
+        for i, x in enumerate(X):
+            results = {'instance': [],\
+                    'cfes': [],\
+                    'cfes_predictions': [],\
+                    'cfes_distances': [],\
+                    "unique_applicable_cfes": [],\
+                    "elapsed_time": 0}
+            
+            self.x = x
+            ## get the scaled individual for the original instance x to use it as a reference for the new individual
+            self.inverse_transformed_x_indexes, self.inverse_transformed_x_features = inverse_transform_individual(self.x, self.scaler, self.feature_columns)
+            print(f"Explaining instance {self.inverse_transformed_x_features}")
+            self.original_prediction = f_model(x, self.model)
+            best_individuals, elapsed_time = self.evolve()
+
+            if len(best_individuals) == 1:
+                print(f"Best cfe is: {best_individuals[0].genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals[0].genes), self.scaler), self.model)}")
+                results['instance'] = self.inverse_transformed_x_features
+                results['cfes'] = best_individuals[0].genes
+                results['cfes_predictions'] = [f_model(transform_individual(np.array(best_individuals[0].genes), self.scaler), self.model)]
+                print([best_individual.genes for best_individual in best_individuals])
+                results['cfes_distances'] = [self.distance(best_individuals[0].genes)]
+                results['elapsed_time'] = elapsed_time
+            else:
+                print(best_individuals)
+                best_individual = best_individuals[0]
+                print(len(best_individuals), best_individual)
+                print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
+                results['instance'] = self.inverse_transformed_x_features
+                results['cfes'] = best_individual.genes
+                results['cfes_predictions'] = [f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model) for best_individual in best_individuals]
+                print([best_individual.genes for best_individual in best_individuals])
+                print(type(self.x), [type(best_individual.genes) for best_individual in best_individuals])
+                results['cfes_distances'] = [self.distance(best_individual.genes) for best_individual in best_individuals]
+                results['elapsed_time'] = elapsed_time
+            
+            results_X[i] = results
+            iteration += 1
+            if iteration == 2:
+                break
+        return results_X
 
     def distance(self, x_prime):
         return np.linalg.norm(np.array(self.inverse_transformed_x_indexes) - np.array(x_prime))

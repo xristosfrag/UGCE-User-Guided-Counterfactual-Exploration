@@ -866,27 +866,27 @@ class UGCE:
                     skip_indexes += [list(self.feature_columns).index(f) for f in one_hot_group]
                     for index in skip_indexes:
                         if best_individual.genes[index] != self.inverse_transformed_x_indexes[index]:
-                            return False
+                            return 'n'
                 elif self.inverse_transformed_x_indexes[i] != best_individual.genes[i]:
-                    return False
+                    return 'n'
                 
             elif feature_name in self.categorical_columns and self.data_distribution:
                 if best_individual.genes[i] not in self.features_ranges[feature_name]:
-                    return False
+                    return 'n'
                 
             elif feature_name in self.one_hot_encode_features:
                 one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
                 skip_indexes += [list(self.feature_columns).index(f) for f in one_hot_group]
                 for index in skip_indexes:
                     if best_individual.genes[index] != self.inverse_transformed_x_indexes[index]:
-                        return False
+                        return 'n'
                     
             else:
                 if self.constraints.get(i):
                     lower, upper = self.constraints[i]
                     if not lower <= best_individual.genes[i] <= upper:
-                        return False
-        return True
+                        return 'n'
+        return 'y'
 
     # Mock function to get updated constraints from the user in the original space
     def get_updated_constraints(self):

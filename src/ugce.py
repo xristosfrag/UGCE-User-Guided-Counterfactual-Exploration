@@ -751,10 +751,13 @@ class UGCE:
         return max(fittness_values), sum(fittness_values) / len(population)
     
     # Helper function to ask user for acceptance, presenting the CFE in the original feature space
-    def ask_user_acceptance(self):   
+    def ask_user_acceptance(self, best_individual=None):   
         # Mock user input (replace with actual user input handling)
         while True:
-            user_response = input("Do you accept this counterfactual explanation? (y/n): ").strip().lower()
+            if not self.automatic_user_acceptance:
+                user_response = input("Do you accept this counterfactual explanation? (y/n): ").strip().lower()
+            else:
+                user_response = self.check_constraints(best_individual)
             if user_response in ["y", "n"]:
                 return user_response == "y"
             else:

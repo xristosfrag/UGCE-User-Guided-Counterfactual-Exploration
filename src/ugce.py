@@ -690,8 +690,8 @@ class UGCE:
                     else:
                         continue      
         return population
-    
-    def changed_prediction_percentage(self, population):
+     
+    def changed_prediction_individuals(self, population):
         """
         Calculate the percentage of individuals that change the model's prediction.
         
@@ -742,7 +742,7 @@ class UGCE:
         # Calculate the percentage of identical individuals in the population
         score = (identical_count / len(population)) * 100
         return score
-
+    
     def best_individuals(self, population, n=1):
         return max(population, key=lambda ind: ind.fitness)
     

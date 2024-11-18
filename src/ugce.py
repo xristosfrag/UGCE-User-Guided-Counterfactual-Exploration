@@ -813,7 +813,10 @@ class UGCE:
             base_feature_name = feature.split('_')[0]    
             if base_feature_name in one_hot_base_features:
                 while True:
-                    user_input = input(f"Set '{base_feature_name}' as immutable? ('i' for immutable, 'ni' to remove immutability or Enter to skip): ").strip()
+                    if feature in self.updated_constraints:
+                        user_input = self.updated_constraints[feature]
+                    else:
+                        user_input = input(f"Set '{base_feature_name}' as immutable? ('i' for immutable, 'ni' to remove immutability or Enter to skip): ").strip()
                     
                     find_indices = [i for i, f in enumerate(self.feature_columns) if f.startswith(base_feature_name)]
                     skip_indices.extend(find_indices)
@@ -836,7 +839,10 @@ class UGCE:
                         break
             else:
                 while True:
-                    user_input = input(f"Enter the lower and upper bounds for feature '{feature}' (or 'i' to make it immutable or 'ni' to remove immutability, Enter to skip): ").strip()
+                    if feature in self.updated_constraints:
+                        user_input = self.updated_constraints[feature]
+                    else:
+                        user_input = input(f"Enter the lower and upper bounds for feature '{feature}' (or 'i' to make it immutable or 'ni' to remove immutability, Enter to skip): ").strip()
                     
                     # User presses enter to pass the feature (no change)
                     if user_input == "":

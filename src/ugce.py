@@ -143,6 +143,10 @@ class UGCE:
         self.cxpb = cxpb
         self.crossover_points = crossover_points
         self.mutpb = mutpb
+        
+        self.updated_constraints = updated_constraints
+        self.automatic_user_acceptance = automatic_user_acceptance
+        self.verbose = verbose
         if not self.complete_random:
             self.seed_number = seed_number
             self.seed_update_number = 0
@@ -153,9 +157,10 @@ class UGCE:
         self.constraints = constraints if constraints else {}
         self.immutables = immutables if immutables else []
         self.setup_constraints()
-        best_individuals = self.evolve()
-        print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
-        return best_individuals
+        best_individuals, elapsed_time_not_dynamic, unique_applicable_cfes_to_unique_individuals_percentage = self.evolve()
+        best_individual = best_individuals[0]
+        print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
+        return best_individual
     
     def explain_instances(self, X, constraints=None, immutables=None,\
         diversity_top_k=1, evaluation=False, dynamic_constraints=False,\

@@ -763,6 +763,41 @@ class UGCE:
             else:
                 print("Invalid input. Please type 'y' or 'n'.")
 
+    def check_constraints(self, best_individual):
+        skip_indexes = []
+        for i in range(len(self.feature_columns)):
+            if i in skip_indexes:
+                continue
+            feature_name = self.feature_columns[i]
+
+            if i in self.immutables:
+                if feature_name in self.one_hot_encode_features:
+                    one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
+                    skip_indexes += [list(self.feature_columns).index(f) for f in one_hot_group]
+                    for index in skip_indexes:
+                        if best_individual.genes[index] != self.inverse_transformed_x_indexes[index]:
+                            return False
+                elif self.inverse_transformed_x_indexes[i] != best_individual.genes[i]:
+                    return False
+                
+            elif feature_name in self.categorical_columns and self.data_distribution:
+                if best_individual.genes[i] not in self.features_ranges[feature_name]:
+                    return False
+                
+            elif feature_name in self.one_hot_encode_features:
+                one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
+                skip_indexes += [list(self.feature_columns).index(f) for f in one_hot_group]
+                for index in skip_indexes:
+                    if best_individual.genes[index] != self.inverse_transformed_x_indexes[index]:
+                        return False
+                    
+            else:
+                if self.constraints.get(i):
+                    lower, upper = self.constraints[i]
+                    if not lower <= best_individual.genes[i] <= upper:
+                        return False
+        return True
+
     # Mock function to get updated constraints from the user in the original space
     def get_updated_constraints(self):
         print(f"Updating constraints for features values...")

@@ -690,35 +690,27 @@ class UGCE:
                     else:
                         continue      
         return population
-    
-    def changed_prediction_percentage(self, population):
+     
+    def changed_prediction_individuals(self, population):
         """
-        Calculate the percentage of individuals that change the model's prediction.
-        
-        ### Inputs:
-        - population: List of Individual instances in the population
-        
-        ### Output:
-        - score: Percentage of individuals that change the model's prediction
-        
-        ### Interpretation:
-        - A higher percentage of individuals that change the prediction indicates a successful search for counterfactual explanations.
-        - A lower percentage of individuals that change the prediction indicates a failure to find a suitable counterfactual explanation.
+        Find the unique applicable CFEs, count them, and calculate the percentage compared to the unique individuals in a population.
         """
-        # Use a set comprehension to keep track of unique individuals based on their genes
-        unique_individuals = {tuple(ind.genes) for ind in population}
+        # Use a dictionary to keep track of unique individuals based on their genes as the key
+        unique_individuals = {tuple(ind.genes): ind for ind in population}
 
-        # Calculate the number of unique individuals that change the prediction
-        changed_count = sum(
-            1 for genes in unique_individuals 
+        # Find the unique individuals that change the prediction
+        unique_applicable_cfes = [
+            ind for genes, ind in unique_individuals.items()
             if f_model(transform_individual(np.array(genes), self.scaler), self.model) != self.original_prediction
-        )
+        ]
         
-        # Calculate the percentage of unique individuals that change the prediction
-        score = (changed_count / len(unique_individuals)) * 100
-        print(f"Changed prediction count: {changed_count}, percentage: {score:.2f}%")
-        return changed_count, score
-        
+        identical_individuals_percentage = (len(unique_individuals) / len(population)) * 100
+
+        unique_applicable_cfes_len = len(unique_applicable_cfes)
+        unique_applicable_cfes_to_unique_individuals_percentage = (unique_applicable_cfes_len / len(unique_individuals)) * 100
+
+        return unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage
+
     def identical_individuals_percentage(self, population):
         """
         Calculate the percentage of identical individuals in the population.
@@ -742,7 +734,7 @@ class UGCE:
         # Calculate the percentage of identical individuals in the population
         score = (identical_count / len(population)) * 100
         return score
-
+    
     def best_individuals(self, population, n=1):
         return max(population, key=lambda ind: ind.fitness)
     

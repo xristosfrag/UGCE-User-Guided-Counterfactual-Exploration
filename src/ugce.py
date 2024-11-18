@@ -212,6 +212,10 @@ class UGCE:
             y_score -= 10000
         else:
             y_score += 10000
+        if self.constraints != {} or self.immutables != []:
+            immutable_score, ranges_score = self.violation(individual, verbose=verbose)
+        else:
+            immutable_score, ranges_score = 0, 0
         if verbose:
             print(f"Distance: {d}, Sparsity: {s}, Immutable_score: {immutable_score}, Ranges_score: {ranges_score}")
         return - self.lambda1 * d - self.lambda2 * s + self.lambda3 * y_score + self.lambda4 * immutable_score + self.lambda5 * ranges_score

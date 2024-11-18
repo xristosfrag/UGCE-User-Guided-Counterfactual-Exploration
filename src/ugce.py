@@ -52,9 +52,7 @@ class UGCE:
         self.numerical_columns = numerical_columns
         self.one_hot_encode_features = one_hot_encode_features
         self.features_ranges = features_ranges
-        self.features_type = features_type
-        self.seed_update_number = 0
-        
+        self.features_type = features_type        
         
     def set_seed(self, seed_number):
         """Set seeds for reproducibility in random and np.random."""
@@ -128,7 +126,6 @@ class UGCE:
         self.fix_population = fix_population
         self.population_size_dynamic = population_size_dynamic
         self.complete_random = complete_random
-        self.seed_update_number = 0
         self.num_generations = num_generations
         self.population_size = population_size
         self.regeneration_tries = regeneration_tries
@@ -146,6 +143,7 @@ class UGCE:
         self.mutpb = mutpb
         if not self.complete_random:
             self.seed_number = seed_number
+            self.seed_update_number = 0
             # Reset seeds to ensure reproducibility in each call
             self.set_seed(self.seed_number)
         
@@ -158,10 +156,10 @@ class UGCE:
         return best_individuals
 
     def distance(self, x_prime):
-        return np.linalg.norm(np.array(self.x) - np.array(x_prime))
+        return np.linalg.norm(np.array(self.inverse_transformed_x_indexes) - np.array(x_prime))
 
     def sparsity(self, x_prime):
-        return np.sum(np.abs(np.array(self.x) - np.array(x_prime)) > 1e-6)
+        return np.sum(np.abs(np.array(self.inverse_transformed_x_indexes) - np.array(x_prime)) > 1e-6)
 
     def violation(self, x_prime, verbose=False):
         """
@@ -616,8 +614,8 @@ class UGCE:
                     print(f"Constraints: {self.constraints}")
                     print(f"Immutable features: {self.immutables}")
                     start_time = time()
-                    self.cxpb = 0.9
-                    self.mutpb = 0.8
+                    # self.cxpb = 0.9
+                    # self.mutpb = 0.8
                     # self.elite_ratio = 0.1
                     population = generations(population, 30, max_fitness)
                     best_individuals = self.best_individuals(population, self.diversity_top_k)

@@ -570,7 +570,7 @@ class UGCE:
                 ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes, verbose=verbose)
         return population
             
-    def population(self, population_size=100):
+    def initialize_population(self, population_size=100):
         population = []
         unique_individuals = set()
         while len(population) < population_size:
@@ -676,7 +676,7 @@ class UGCE:
         
         regeneration_tries = 0
         while 1:
-            population = self.population(self.population_size)
+            population = self.initialize_population(self.population_size)
             if self.verbose:
                 print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
             
@@ -779,7 +779,7 @@ class UGCE:
                     ##### ADD INDIVIDUALS THAT ADHERE TO THE NEW CONSTRAINTS TO THE POPULATION #####  
                     if self.population_size_dynamic > 0:
                         ## Just create |self.population_size_dynamic| individuals that adheres to the new constraints
-                        new_population = self.population(population_size=self.population_size_dynamic)
+                        new_population = self.initialize_population(population_size=self.population_size_dynamic)
 
                         ## get the fitness of the new individual
                         self.fitness_assignment(new_population)

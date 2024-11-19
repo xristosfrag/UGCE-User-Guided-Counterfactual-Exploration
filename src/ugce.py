@@ -152,7 +152,7 @@ class UGCE:
             self.seed_update_number = 0
             # Reset seeds to ensure reproducibility in each call
             self.set_seed(self.seed_number)
-        
+            
         self.original_prediction = f_model(x, self.model)
         self.constraints = constraints if constraints else {}
         self.immutables = immutables if immutables else []
@@ -216,7 +216,7 @@ class UGCE:
         self.constraints = constraints if constraints else {}
         self.immutables = immutables if immutables else []
         self.setup_constraints()
-        
+               
         results_X = {}
         iteration = 0
         # for i, x in enumerate(tqdm(X, desc="Explaining instances")):
@@ -511,6 +511,7 @@ class UGCE:
                     while new_value == original_value:
                         new_value = random.choice(possible_values)
                     individual.genes[i] = new_value
+                    
                 elif feature_name in self.one_hot_encode_features:
                     one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
                     current_index = next(idx for idx in one_hot_group if individual.genes[list(self.feature_columns).index(idx)] == 1)
@@ -704,8 +705,6 @@ class UGCE:
             cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
             display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
             print()
-
-        elapsed_time_not_dynamic = time() - time_start_not_dynamic
     
         # If dynamic constraints are enabled, ask the user for acceptance and update constraints
         if self.dynamic_constraints:
@@ -817,8 +816,6 @@ class UGCE:
                     elapsed_time += (time() - start_time)
                     if self.verbose:
                         print(f"Time taken for dynamic constraint placement: {elapsed_time:.2f} seconds")
-                    if self.verbose:
-                        print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
 
                     if len(unique_applicable_cfes) != 0\
                                     and regeneration_tries < self.regeneration_tries:

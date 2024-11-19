@@ -108,9 +108,31 @@ class UGCE:
                     break
         return selected
 
-    def rank_selection(self, population, k):
-        population = sorted(population, key=lambda ind: ind.fitness, reverse=True)
-        return population[:k]
+    def rank_selection(population, k):
+        """
+        Perform rank-based selection from a population.
+
+        This method sorts the population by fitness and assigns a selection
+        probability inversely proportional to the rank. Individuals are selected
+        using these probabilities, allowing for a fair chance across different
+        fitness levels.
+
+        Parameters:
+        - population: List of individuals from which to select.
+        - k: Number of individuals to select.
+
+        Returns:
+        - List of selected individuals.
+        """
+        sorted_population = sorted(population, key=lambda ind: ind.fitness, reverse=True)
+        
+        # Assign selection probabilities based on rank (linearly decreasing)
+        total_ranks = len(population) * (len(population) + 1) / 2  # Sum of series 1 to N
+        rank_probabilities = [(len(population) - i) / total_ranks for i in range(len(population))]
+        
+        # Select individuals using roulette wheel selection
+        selected = random.choices(sorted_population, weights=rank_probabilities, k=k)
+        return selected
 
     def sus_selection(self, population, k):
         """

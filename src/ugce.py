@@ -557,6 +557,8 @@ class UGCE:
         Args:
             population (list): The population of individuals to evaluate.
         """
+        ## deepcopy the population to avoid changing the original population
+        population = deepcopy(population)
         if not self.complete_random:
             self.set_seed(self.seed_number)
         if clear_fitness:
@@ -566,6 +568,7 @@ class UGCE:
         else:
             for ind in population:
                 ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes, verbose=verbose)
+        return population
             
     def population(self, population_size=100):
         population = []
@@ -644,7 +647,7 @@ class UGCE:
                         self.mutate_individual(mutant)
                 
                 # Evaluate the fitness of the offspring
-                self.fitness_assignment(offspring)
+                offspring = self.fitness_assignment(offspring)
                 # print(f"    Population size: {len(population)}, offspring size: {len(offspring)}")
 
                 # Ensure only the needed number of offspring are retained
@@ -677,7 +680,7 @@ class UGCE:
             if self.verbose:
                 print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
             
-            self.fitness_assignment(population)
+            population = self.fitness_assignment(population)
             if self.verbose:
                 print(f"Constraints: {self.constraints}")
                 print(f"Immutable features: {self.immutables}")
@@ -738,7 +741,7 @@ class UGCE:
                     if self.verbose:
                         print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
                     # Update the fitness values based on the new constraints
-                    self.fitness_assignment(population, clear_fitness=True)
+                    population = self.fitness_assignment(population, clear_fitness=True)
                     
                     max_fitness = max(population, key=lambda ind: ind.fitness).fitness
                     if self.verbose:
@@ -783,8 +786,7 @@ class UGCE:
                         population.extend(new_population)
                                         
                         # Update the fitness values based on the new constraints
-                        self.fitness_assignment(population, clear_fitness=True)
-                        print(f"    !! Best fitness of the updated population: {max(new_population, key=lambda ind: ind.fitness).fitness}")
+                        population = self.fitness_assignment(population, clear_fitness=True)
 
                         # and remove the worst individual cause we just added a new one
                         population = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:-self.population_size_dynamic]

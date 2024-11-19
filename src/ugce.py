@@ -322,7 +322,7 @@ class UGCE:
                 results['unique_applicable_cfes_to_unique_individuals_percentage'] = 0
                 results['cfes'] = []
 
-            if len(best_individuals) == 1:
+            elif len(best_individuals) == 1:
                 if self.verbose:
                     print(f"Best cfe is: {best_individuals[0].genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals[0].genes), self.scaler), self.model)}")
                 results['instance'] = self.inverse_transformed_x_indexes

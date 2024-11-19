@@ -240,14 +240,17 @@ class UGCE:
             ## get the scaled individual for the original instance x to use it as a reference for the new individual
             self.inverse_transformed_x_indexes, self.inverse_transformed_x_features = inverse_transform_individual(self.x, self.scaler, self.feature_columns)
             if iteration>0:
-                print(f"\n\nExplaining instance {self.inverse_transformed_x_features}")
+                if self.verbose:
+                    print(f"\n\nExplaining instance {self.inverse_transformed_x_features}")
             else:
-                print(f"Explaining instance {self.inverse_transformed_x_features}")
+                if self.verbose:
+                    print(f"Explaining instance {self.inverse_transformed_x_features}")
             self.original_prediction = f_model(x, self.model)
             best_individuals, elapsed_time, unique_applicable_cfes_to_unique_individuals_percentage = self.evolve()
             
             if len(best_individuals) == 0:
-                print(f"No solution found for the instance {self.inverse_transformed_x_features}.")
+                if self.verbose:
+                    print(f"No solution found for the instance {self.inverse_transformed_x_features}.")
                 results['instance'] = self.inverse_transformed_x_indexes
                 results['best_cfe'] = []
                 results['elapsed_time'] = elapsed_time
@@ -258,7 +261,8 @@ class UGCE:
                 results['cfes'] = []
 
             if len(best_individuals) == 1:
-                print(f"Best cfe is: {best_individuals[0].genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals[0].genes), self.scaler), self.model)}")
+                if self.verbose:
+                    print(f"Best cfe is: {best_individuals[0].genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals[0].genes), self.scaler), self.model)}")
                 results['instance'] = self.inverse_transformed_x_indexes
                 results['best_cfe'] = best_individuals[0].genes
                 results['elapsed_time'] = elapsed_time
@@ -270,8 +274,8 @@ class UGCE:
             else:
                 # print(best_individuals)
                 best_individual = best_individuals[0]
-                # print(len(best_individuals), best_individual)
-                print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
+                if self.verbose:
+                    print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
                 results['instance'] = self.inverse_transformed_x_indexes
                 results['best_cfe'] = best_individual.genes
                 results['elapsed_time'] = elapsed_time

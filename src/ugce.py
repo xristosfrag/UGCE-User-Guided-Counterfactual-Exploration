@@ -158,8 +158,12 @@ class UGCE:
         self.immutables = immutables if immutables else []
         self.setup_constraints()
         best_individuals, elapsed_time_not_dynamic, unique_applicable_cfes_to_unique_individuals_percentage = self.evolve()
-        best_individual = best_individuals[0]
-        print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
+        if len(best_individuals) == 0:
+            print(f"No solution found for the instance {self.inverse_transformed_x_features}.")
+            return None
+        else:
+            best_individual = best_individuals[0]
+            print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
         return best_individual
     
     def explain_instances(self, X, constraints=None, immutables=None,\

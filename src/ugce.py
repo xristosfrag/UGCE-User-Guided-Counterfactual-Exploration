@@ -241,6 +241,17 @@ class UGCE:
                 print(f"Explaining instance {self.inverse_transformed_x_features}")
             self.original_prediction = f_model(x, self.model)
             best_individuals, elapsed_time, unique_applicable_cfes_to_unique_individuals_percentage = self.evolve()
+            
+            if len(best_individuals) == 0:
+                print(f"No solution found for the instance {self.inverse_transformed_x_features}.")
+                results['instance'] = self.inverse_transformed_x_indexes
+                results['best_cfe'] = []
+                results['elapsed_time'] = elapsed_time
+
+                results['Applicable_cfes_number'] = 0
+                results['cfes_distances'] = []
+                results['unique_applicable_cfes_to_unique_individuals_percentage'] = 0
+                results['cfes'] = []
 
             if len(best_individuals) == 1:
                 print(f"Best cfe is: {best_individuals[0].genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals[0].genes), self.scaler), self.model)}")

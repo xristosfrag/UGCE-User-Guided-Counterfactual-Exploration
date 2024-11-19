@@ -933,6 +933,8 @@ class UGCE:
                 user_response = input("Do you accept this counterfactual explanation? (y/n): ").strip().lower()
             else:
                 user_response = self.check_constraints(best_individual)
+                if self.verbose:
+                    print(f"Constraints check: {user_response}")
             if user_response in ["y", "n"]:
                 return user_response == "y"
             else:
@@ -951,26 +953,40 @@ class UGCE:
                     skip_indexes += [list(self.feature_columns).index(f) for f in one_hot_group]
                     for index in skip_indexes:
                         if best_individual.genes[index] != self.inverse_transformed_x_indexes[index]:
+                            if self.verbose:
+                                print(f"Feature '{feature_name}' is immutable. Expected value: {self.inverse_transformed_x_indexes[index]}, found: {best_individual.genes[index]}.")
                             return 'n'
                 elif self.inverse_transformed_x_indexes[i] != best_individual.genes[i]:
+                    if self.verbose:
+                        print(f"Feature '{feature_name}' is immutable. Expected value: {self.inverse_transformed_x_indexes[i]}, found: {best_individual.genes[i]}.")
                     return 'n'
                 
             elif feature_name in self.categorical_columns and self.data_distribution:
                 if best_individual.genes[i] not in self.features_ranges[feature_name]:
+                    if self.verbose:
+                        print(f"Feature '{feature_name}' value is not in the known distribution: {best_individual.genes[i]}.")
                     return 'n'
                 
             elif feature_name in self.one_hot_encode_features:
                 one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
                 skip_indexes += [list(self.feature_columns).index(f) for f in one_hot_group]
+                count_changes = 0
                 for index in skip_indexes:
                     if best_individual.genes[index] != self.inverse_transformed_x_indexes[index]:
-                        return 'n'
-                    
+                        count_changes += 1
+                if count_changes > 2:
+                    if self.verbose:
+                        print(f"Feature '{feature_name}' has more than one change. Expected: {self.inverse_transformed_x_features[feature_name]}, found: {best_individual.genes[i]}.")
+                    return 'n'
             else:
                 if self.constraints.get(i):
                     lower, upper = self.constraints[i]
                     if not lower <= best_individual.genes[i] <= upper:
+                        if self.verbose:
+                            print(f"Feature '{feature_name}' value is out of bounds: {best_individual.genes[i]}. Expected: [{lower}, {upper}].")
                         return 'n'
+        if self.verbose:
+            print("All constraints are satisfied.")
         return 'y'
 
     # Mock function to get updated constraints from the user in the original space

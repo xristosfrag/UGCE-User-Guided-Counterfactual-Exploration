@@ -750,31 +750,11 @@ class UGCE:
                     max_fitness = max(population, key=lambda ind: ind.fitness).fitness
                     if self.verbose:
                         print(f"    !! Best fitness using the new constraints: {max_fitness}")
-                        
-                    counter_wrongs = 0
-                    for ind in population:
-                        if self.check_constraints(ind) != 'y':
-                            counter_wrongs += 1
-                    print(f"    !! Number of wrong individuals: {counter_wrongs}")
-                    counter_wrongs = 0
-
-                    unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
-                    if self.verbose:
-                        print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
                     
                     ##### FIXING THE POPULATION #####
                     if self.fix_population:
                         population = self.update_population(population)
                         self.fitness_assignment(population, clear_fitness=True)
-                        max_fitness = max(population, key=lambda ind: ind.fitness).fitness
-                        if self.verbose:
-                            print(f"    !! Best fitness after fixing the population: {max_fitness}")
-                        unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
-                    
-                    if self.verbose:
-                        print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
-                        best_individual = self.best_individuals(population, 0)
-                        print(f"    Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}") 
                        
                     ##### ADD INDIVIDUALS THAT ADHERE TO THE NEW CONSTRAINTS TO THE POPULATION #####  
                     if self.population_size_dynamic > 0:
@@ -783,8 +763,6 @@ class UGCE:
 
                         ## get the fitness of the new individual
                         self.fitness_assignment(new_population)
-                        ## print the fitness of the best new population
-                        print(f"    !! Best fitness of the brand new population: {max(new_population, key=lambda ind: ind.fitness).fitness}")
 
                         ## now add this individual to the population 
                         population.extend(new_population)
@@ -851,7 +829,7 @@ class UGCE:
             return unique_applicable_cfes, elapsed_time, unique_applicable_cfes_to_unique_individuals_percentage
         else:
             self.population = population
-            return best_individuals, elapsed_time_not_dynamic, unique_applicable_cfes_to_unique_individuals_percentage
+            return unique_applicable_cfes, elapsed_time_not_dynamic, unique_applicable_cfes_to_unique_individuals_percentage
         
     def update_population(self, population):
         ## deepcopy the population

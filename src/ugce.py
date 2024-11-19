@@ -61,6 +61,20 @@ class UGCE:
         np.random.seed(seed_number)
 
     def tournament_selection(self, population, k):
+        """
+        Perform tournament selection from a population.
+
+        This method selects `k` individuals from the population by holding
+        `self.tournsize` tournaments. In each tournament, `self.tournsize` individuals
+        are randomly chosen, and the one with the highest fitness is selected.
+
+        Parameters:
+        - population: List of individuals from which to select.
+        - k: Number of individuals to select.
+
+        Returns:
+        - List of selected individuals.
+        """
         winners = []
         for _ in range(k):
             participants = random.sample(population, self.tournsize)
@@ -68,6 +82,20 @@ class UGCE:
         return winners
 
     def roulette_selection(self, population, k):
+        """
+        Perform roulette wheel selection from a population.
+
+        This method selects `k` individuals based on their fitness proportionally. 
+        Each individual's chance of being selected is proportional to its fitness,
+        simulating a roulette wheel spin.
+
+        Parameters:
+        - population: List of individuals from which to select.
+        - k: Number of individuals to select.
+
+        Returns:
+        - List of selected individuals.
+        """
         total_fitness = sum(ind.fitness for ind in population)
         selected = []
         for _ in range(k):
@@ -85,6 +113,20 @@ class UGCE:
         return population[:k]
 
     def sus_selection(self, population, k):
+        """
+        Perform stochastic universal sampling (SUS) from a population.
+
+        SUS is a method that selects `k` individuals by using a single random start
+        point and evenly spaced intervals, ensuring a spread of selections across
+        the population's fitness range.
+
+        Parameters:
+        - population: List of individuals from which to select.
+        - k: Number of individuals to select.
+
+        Returns:
+        - List of selected individuals.
+        """
         total_fitness = sum(ind.fitness for ind in population)
         distance = total_fitness / k
         start_point = random.uniform(0, distance)

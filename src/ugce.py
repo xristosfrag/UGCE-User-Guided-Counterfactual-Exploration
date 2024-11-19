@@ -122,7 +122,6 @@ class UGCE:
         self.num_generations = num_generations
         self.early_stopping_iterations = early_stopping_iterations
         self.elite_ratio = elite_ratio # Percentage of individuals to retain from both current and offspring population
-        self.initial_population_variability = initial_population_variability
         self.data_distribution = data_distribution
         
         self.fix_population = fix_population
@@ -186,7 +185,6 @@ class UGCE:
         self.num_generations = num_generations
         self.early_stopping_iterations = early_stopping_iterations
         self.elite_ratio = elite_ratio # Percentage of individuals to retain from both current and offspring population
-        self.initial_population_variability = initial_population_variability
         self.data_distribution = data_distribution
 
         self.fix_population = fix_population
@@ -272,7 +270,6 @@ class UGCE:
                 results['unique_applicable_cfes_to_unique_individuals_percentage'] = 1
                 results['cfes'] = best_individuals[0].genes
             else:
-                # print(best_individuals)
                 best_individual = best_individuals[0]
                 if self.verbose:
                     print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
@@ -602,6 +599,7 @@ class UGCE:
                     self.seed_update_number += gen
                     self.set_seed(self.seed_number + self.seed_update_number)
 
+                if self.verbose:
                 print(f"Generation: {gen}")
                 if self.elite_ratio > 0:
                     # Select the top elite individuals from the current population

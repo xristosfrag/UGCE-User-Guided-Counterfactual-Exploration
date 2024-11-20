@@ -665,7 +665,7 @@ class UGCE:
                     self.set_seed(self.seed_number + self.seed_update_number)
 
                 if self.verbose:
-                print(f"Generation: {gen}")
+                    print(f"Generation: {gen}")
                 if self.elite_ratio > 0:
                     # Select the top elite individuals from the current population
                     elite_individuals = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:elite_count]

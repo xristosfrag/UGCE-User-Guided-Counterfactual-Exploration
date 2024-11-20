@@ -228,7 +228,7 @@ class UGCE:
             best_individual = best_individuals[0]
             print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
         return best_individual
-    
+   
     def explain_instances(self, X, constraints=None, immutables=None,\
         diversity_top_k=1, evaluation=False, dynamic_constraints=False,\
         initial_population_variability=0.2, data_distribution=True,\
@@ -237,7 +237,8 @@ class UGCE:
             selection_method="tournament", tournsize=3,\
             early_stopping_iterations=3, elite_ratio=0.1, \
                 lambda1=1, lambda2=1, lambda3=1, lambda4=1, lambda5=1, cxpb=0.5, crossover_points=3, mutpb=0.2,\
-                updated_constraints=None, automatic_user_acceptance=True, verbose=False):
+                updated_constraints=None, automatic_user_acceptance=True, verbose=False,\
+                running_times_per_instance=10):
         """
         Explain the instances by evolving counterfactual examples.
         """

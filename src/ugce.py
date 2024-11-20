@@ -348,7 +348,7 @@ class UGCE:
                 results['Avg_cfes_distance'] = (sum(cfes_distances_list) / len(cfes_distances_list)) / running_times_per_instance
                 results['Avg_Unique_applicable_cfes_to_unique_individuals_percentage'] = sum(unique_applicable_percentages) / running_times_per_instance
                 results['Cfes'] = cfes_list
-                results['At_least_one_cfe_found_percentage'] = at_least_one_cfe_count / running_times_per_instance
+                results['Times_that_at_least_one_cfe_found_percentage'] = at_least_one_cfe_count / running_times_per_instance
             
             ## If running times per instance is 1 then return the results as they are
             else:
@@ -356,9 +356,9 @@ class UGCE:
                 results['Avg_Applicable_cfes_number'] = total_cfes_found / running_times_per_instance
                 results['Cfes_distances'] = cfes_distances_list
                 results['Avg_cfes_distance'] = (sum(cfes_distances_list) / len(cfes_distances_list)) if cfes_distances_list else 0
-                results['Unique_applicable_cfes_to_unique_individuals_percentage'] = unique_applicable_percentages[0] if unique_applicable_percentages else 0
+                results['Avg_Unique_applicable_cfes_to_unique_individuals_percentage'] = unique_applicable_percentages[0] if unique_applicable_percentages else 0
                 results['Cfes'] = cfes_list
-                results['At_least_one_cfe_found_percentage'] = at_least_one_cfe_count
+                results['Times_that_at_least_one_cfe_found_percentage'] = at_least_one_cfe_count
 
             results_X[i] = results
             iteration += 1

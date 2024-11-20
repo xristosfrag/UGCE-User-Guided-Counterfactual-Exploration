@@ -340,21 +340,22 @@ class UGCE:
 
                 self.constraints, self.immutables = {}, []
 
-            # Finalize result calculations
+            ## If running times per instance is more than 1 then calculate the average of the results
             if running_times_per_instance > 1:
                 results['Avg_elapsed_time'] = sum(elapsed_times) / running_times_per_instance
                 results['Avg_Applicable_cfes_number'] = total_cfes_found / running_times_per_instance
                 results['Cfes_distances'] = cfes_distances_list
-                results['Avg_cfes_distance'] = sum(cfes_distances_list) / running_times_per_instance
-                results['Unique_applicable_cfes_to_unique_individuals_percentage'] = sum(unique_applicable_percentages) / running_times_per_instance
+                results['Avg_cfes_distance'] = (sum(cfes_distances_list) / len(cfes_distances_list)) / running_times_per_instance
+                results['Avg_Unique_applicable_cfes_to_unique_individuals_percentage'] = sum(unique_applicable_percentages) / running_times_per_instance
                 results['Cfes'] = cfes_list
                 results['At_least_one_cfe_found_percentage'] = at_least_one_cfe_count / running_times_per_instance
+            
+            ## If running times per instance is 1 then return the results as they are
             else:
-                results['Best_cfe'] = cfes_list[0] if cfes_list else []
-                results['elapsed_time'] = elapsed_times[0] if elapsed_times else 0
-                results['Applicable_cfes_number'] = total_cfes_found
+                results['Avg_elapsed_time'] = elapsed_times[0] if elapsed_times else 0
+                results['Avg_Applicable_cfes_number'] = total_cfes_found / running_times_per_instance
                 results['Cfes_distances'] = cfes_distances_list
-                results['Avg_cfes_distance'] = sum(cfes_distances_list) / len(cfes_distances_list) if cfes_distances_list else 0
+                results['Avg_cfes_distance'] = (sum(cfes_distances_list) / len(cfes_distances_list)) if cfes_distances_list else 0
                 results['Unique_applicable_cfes_to_unique_individuals_percentage'] = unique_applicable_percentages[0] if unique_applicable_percentages else 0
                 results['Cfes'] = cfes_list
                 results['At_least_one_cfe_found_percentage'] = at_least_one_cfe_count

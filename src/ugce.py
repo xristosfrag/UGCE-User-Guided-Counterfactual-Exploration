@@ -286,73 +286,81 @@ class UGCE:
                
         results_X = {}
         iteration = 0
-        # for i, x in enumerate(tqdm(X, desc="Explaining instances")):
+
         for i, x in tqdm(enumerate(X), desc="Explaining instances", total=len(X)):
-
-            results = {"instance": [],\
-                    "best_cfe": [],\
-                    "elapsed_time": 0,\
-                    
-                    "Applicable_cfes_number": 0,\
-                    "cfes_distances": [],\
-                    "unique_applicable_cfes_to_unique_individuals_percentage": 0,\
-                    "cfes": []
-                    }
-            
             self.x = x
-            ## get the scaled individual for the original instance x to use it as a reference for the new individual
             self.inverse_transformed_x_indexes, self.inverse_transformed_x_features = inverse_transform_individual(self.x, self.scaler, self.feature_columns)
-            if iteration>0:
-                if self.verbose:
+            if self.verbose:
+                if iteration > 0:
                     print(f"\n\nExplaining instance {self.inverse_transformed_x_features}")
-            else:
-                if self.verbose:
-                    print(f"Explaining instance {self.inverse_transformed_x_features}")
-            self.original_prediction = f_model(x, self.model)
-            best_individuals, elapsed_time, unique_applicable_cfes_to_unique_individuals_percentage = self.evolve()
-            
-            if len(best_individuals) == 0:
-                if self.verbose:
-                    print(f"No solution found for the instance {self.inverse_transformed_x_features}.")
-                results['instance'] = self.inverse_transformed_x_indexes
-                results['best_cfe'] = []
-                results['elapsed_time'] = elapsed_time
+                else:
+                    print(f"Explaining instance {self.inverse_transformed_x_indexes}")
 
-                results['Applicable_cfes_number'] = 0
-                results['cfes_distances'] = []
-                results['unique_applicable_cfes_to_unique_individuals_percentage'] = 0
-                results['cfes'] = []
-
-            elif len(best_individuals) == 1:
-                if self.verbose:
-                    print(f"Best cfe is: {best_individuals[0].genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals[0].genes), self.scaler), self.model)}")
-                results['instance'] = self.inverse_transformed_x_indexes
-                results['best_cfe'] = best_individuals[0].genes
-                results['elapsed_time'] = elapsed_time
+            results = {
+                "Instance": self.inverse_transformed_x_indexes,
+                "Best_cfe": [],
+                "Best_cfe_fitness": 0,
+                "Best_cfe_distance": 0,
                 
-                results['Applicable_cfes_number'] = 1
-                results['cfes_distances'] = [self.distance(best_individuals[0].genes)]
-                results['unique_applicable_cfes_to_unique_individuals_percentage'] = 1
-                results['cfes'] = best_individuals[0].genes
-            else:
-                best_individual = best_individuals[0]
-                if self.verbose:
-                    print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
-                results['instance'] = self.inverse_transformed_x_indexes
-                results['best_cfe'] = best_individual.genes
-                results['elapsed_time'] = elapsed_time
+                "Avg_elapsed_time": 0,
+                "Avg_Applicable_cfes_number": 0,
+                "Cfes_distances": [],
+                "Avg_cfes_distance": 0,
+                "Unique_applicable_cfes_to_unique_individuals_percentage": 0,
+                "Cfes": [],
+                "At_least_one_cfe_found_percentage": 0
+            }
+            total_cfes_found = 0
+            elapsed_times = []
+            unique_applicable_percentages = []
+            cfes_distances_list = []
+            cfes_list = []
+            at_least_one_cfe_count = 0
 
-                results['Applicable_cfes_number'] = len(best_individuals)
-                results['cfes_distances'] = [self.distance(best_individual.genes) for best_individual in best_individuals]
-                results['unique_applicable_cfes_to_unique_individuals_percentage'] = unique_applicable_cfes_to_unique_individuals_percentage
-                results['cfes'] = [best_individual.genes for best_individual in best_individuals]
+            for _ in range(running_times_per_instance):
+                self.original_prediction = f_model(x, self.model)
+                best_individuals, elapsed_time, unique_applicable_percentage = self.evolve()
+
+                if len(best_individuals) > 0:
+                    best_individual = best_individuals[0]
+                    if self.verbose:
+                        print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
+                    # Update best CFE if current one is better
+                    if len(results['Best_cfe']) == 0 or best_individual.fitness > results['Best_cfe_fitness']:
+                        results['Best_cfe'] = best_individual.genes
+                        results['Best_cfe_fitness'] = best_individual.fitness
+                        results['Best_cfe_distance'] = self.distance(best_individual.genes)
+                    # Aggregate statistics for averages
+                    total_cfes_found += len(best_individuals)
+                    elapsed_times.append(elapsed_time)
+                    cfes_distances_list.extend([self.distance(best_individual.genes) for best_individual in best_individuals])
+                    cfes_list.extend([best_individual.genes for best_individual in best_individuals])
+                    unique_applicable_percentages.append(unique_applicable_percentage)
+                    at_least_one_cfe_count += 1
+
+                self.constraints, self.immutables = {}, []
+
+            # Finalize result calculations
+            if running_times_per_instance > 1:
+                results['Avg_elapsed_time'] = sum(elapsed_times) / running_times_per_instance
+                results['Avg_Applicable_cfes_number'] = total_cfes_found / running_times_per_instance
+                results['Cfes_distances'] = cfes_distances_list
+                results['Avg_cfes_distance'] = sum(cfes_distances_list) / running_times_per_instance
+                results['Unique_applicable_cfes_to_unique_individuals_percentage'] = sum(unique_applicable_percentages) / running_times_per_instance
+                results['Cfes'] = cfes_list
+                results['At_least_one_cfe_found_percentage'] = at_least_one_cfe_count / running_times_per_instance
+            else:
+                results['Best_cfe'] = cfes_list[0] if cfes_list else []
+                results['elapsed_time'] = elapsed_times[0] if elapsed_times else 0
+                results['Applicable_cfes_number'] = total_cfes_found
+                results['Cfes_distances'] = cfes_distances_list
+                results['Avg_cfes_distance'] = sum(cfes_distances_list) / len(cfes_distances_list) if cfes_distances_list else 0
+                results['Unique_applicable_cfes_to_unique_individuals_percentage'] = unique_applicable_percentages[0] if unique_applicable_percentages else 0
+                results['Cfes'] = cfes_list
+                results['At_least_one_cfe_found_percentage'] = at_least_one_cfe_count
+
             results_X[i] = results
             iteration += 1
-            
-            # remove again the updated constraints
-            self.constraints = {}
-            self.immutables = []
-            
         return results_X
 
     def distance(self, x_prime):

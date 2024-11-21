@@ -4,6 +4,30 @@ from aif360.sklearn.datasets import fetch_compas
 from sklearn import preprocessing
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder, KBinsDiscretizer
 
+import sys
+import os
+
+def get_UGCE_directory():
+    """Get the path of the 'UGCE-User-Guided-Counterfactual-Exploration' directory."""
+    current_dir = os.getcwd()
+    target_dir = 'UGCE-User-Guided-Counterfactual-Exploration'
+    
+    while os.path.basename(current_dir) != target_dir:
+        current_dir = os.path.dirname(current_dir)
+        if current_dir == os.path.dirname(current_dir):
+            return None
+        
+    return current_dir
+
+def get_system_slash():
+    """Get the system-specific directory separator."""
+    return os.sep
+
+ugce_dir = get_UGCE_directory()
+sys.path.append(ugce_dir)
+sep = get_system_slash()
+sys.path.append(ugce_dir + get_system_slash() + 'src')
+
 def calculate_num_bins(num_unique_values, value_range):
     num_bins = min(6, int(np.log2(num_unique_values)) + 1)
     num_bins = min(num_bins, value_range)

@@ -79,6 +79,37 @@ def preprocess_dataset(df, continuous_features=[], one_hot_encode=True, datasetN
                     feature_types[col] = 'float'
     return df, numeric_columns, categorical_columns, one_hot_encode_features, feature_types
 
+def load_student():
+    data_df = pd.read_csv(f"{ugce_dir}/data/student.csv")
+    TARGET_COLUMNS = data_df.columns[-1]
+    data = data_df.drop(columns=[TARGET_COLUMNS])
+    data, numeric_columns, categorical_columns, one_hot_encode_features, feature_types = preprocess_dataset(data, continuous_features=[])
+    FEATURE_COLUMNS = data.columns
+    min_max_scaler = preprocessing.MinMaxScaler()
+    data_scaled = min_max_scaler.fit_transform(data[FEATURE_COLUMNS].values)
+    features_ranges = {}
+    for col in data.columns:
+        if col in one_hot_encode_features or col in categorical_columns:
+            # For categorical and one-hot encoded features, return unique values as native Python types
+            features_ranges[col] = [int(value) if isinstance(value, np.integer) else value for value in data[col].unique()]
+        else:
+            # For numerical features, return the min and max as native Python types
+            min_val = data[col].min()
+            max_val = data[col].max()
+            features_ranges[col] = (int(min_val), int(max_val)) if feature_types[col] == 'int' else (float(min_val), float(max_val))
+    
+    return (
+        data_scaled,  # Convert features to list
+        data_df[TARGET_COLUMNS],   # Convert target to list
+        min_max_scaler,
+        FEATURE_COLUMNS,
+        categorical_columns,
+        numeric_columns,
+        one_hot_encode_features,
+        features_ranges,
+        feature_types
+    )
+
 def load_compas():
     X, y = fetch_compas()
     X = X.reset_index(drop=True)

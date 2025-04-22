@@ -39,7 +39,7 @@ def preprocess_dataset(df, continuous_features=[], one_hot_encode=True, datasetN
     numeric_columns = []
     categorical_columns = []
     one_hot_encode_features = []
-    feature_types = {}  # Dictionary to store whether features are int or float
+    feature_types = {}
 
     for col in df.columns:
         if (df[col].dtype == 'object' or df[col].dtype == 'category') and col not in continuous_features:
@@ -78,6 +78,19 @@ def preprocess_dataset(df, continuous_features=[], one_hot_encode=True, datasetN
                 elif pd.api.types.is_float_dtype(df[col]):
                     feature_types[col] = 'float'
     return df, numeric_columns, categorical_columns, one_hot_encode_features, feature_types
+
+
+def load_dataset(dataset_name):
+    if dataset_name == 'Adult':
+        return load_adult()
+    elif dataset_name == 'Student':
+        return load_student()
+    elif dataset_name == 'HELOC':
+        return load_heloc()
+    elif dataset_name == 'Compas':
+        return load_compas()
+    else:
+        raise ValueError(f"Invalid dataset name: {dataset_name}")
 
 def load_student():
     data_df = pd.read_csv(f"{ugce_dir}/data/student.csv")

@@ -70,13 +70,11 @@ def preprocess_dataset(df, continuous_features=[], one_hot_encode=True, datasetN
             bins = bin_discretizer.fit_transform(df[[col]])
             df[col] = bins.astype(int)
         else:
-            if len(df[col].unique()) > 2:
-                numeric_columns.append(col)
-            
-                if pd.api.types.is_integer_dtype(df[col]):
-                    feature_types[col] = 'int'
-                elif pd.api.types.is_float_dtype(df[col]):
-                    feature_types[col] = 'float'
+            numeric_columns.append(col)
+            if pd.api.types.is_integer_dtype(df[col]):
+                feature_types[col] = 'int'
+            elif pd.api.types.is_float_dtype(df[col]):
+                feature_types[col] = 'float'
     return df, numeric_columns, categorical_columns, one_hot_encode_features, feature_types
 
 
@@ -103,18 +101,108 @@ def load_student():
     features_ranges = {}
     for col in data.columns:
         if col in one_hot_encode_features or col in categorical_columns:
-            # For categorical and one-hot encoded features, return unique values as native Python types
             features_ranges[col] = [int(value) if isinstance(value, np.integer) else value for value in data[col].unique()]
         else:
-            # For numerical features, return the min and max as native Python types
             min_val = data[col].min()
             max_val = data[col].max()
             features_ranges[col] = (int(min_val), int(max_val)) if feature_types[col] == 'int' else (float(min_val), float(max_val))
-    
+    min_max_scaler_per_column = {}
+    for col in data.columns:
+        scl = preprocessing.MinMaxScaler()
+        min_max_scaler_per_column[col] = scl.fit(data[col].values.reshape(-1, 1))
     return (
-        data_scaled,  # Convert features to list
-        data_df[TARGET_COLUMNS],   # Convert target to list
+        data,
+        data_scaled,
+        data_df[TARGET_COLUMNS],
         min_max_scaler,
+        min_max_scaler_per_column,
+        FEATURE_COLUMNS,
+        categorical_columns,
+        numeric_columns,
+        one_hot_encode_features,
+        features_ranges,
+        feature_types
+    )
+
+def load_adult():
+    data_df = pd.read_csv(f"{ugce_dir}/data/adult.csv")
+    TARGET_COLUMNS = data_df.columns[-1]
+    data = data_df.drop(columns=[TARGET_COLUMNS])
+
+    data['race'] = data['race'].astype(str)
+
+    data, numeric_columns, categorical_columns, one_hot_encode_features, feature_types = preprocess_dataset(data, continuous_features=[])
+    FEATURE_COLUMNS = data.columns      
+
+    min_max_scaler = preprocessing.MinMaxScaler()
+    data_scaled = min_max_scaler.fit_transform(data[FEATURE_COLUMNS].values)
+    features_ranges = {}
+    for col in data.columns:
+        if col in one_hot_encode_features or col in categorical_columns:
+            features_ranges[col] = [int(value) if isinstance(value, np.integer) else value for value in data[col].unique()]
+        else:
+            min_val = data[col].min()
+            max_val = data[col].max()
+            features_ranges[col] = (int(min_val), int(max_val)) if feature_types[col] == 'int' else (float(min_val), float(max_val))
+    min_max_scaler_per_column = {}
+    for col in data.columns:
+        scl = preprocessing.MinMaxScaler()
+        min_max_scaler_per_column[col] = scl.fit(data[col].values.reshape(-1, 1))
+    return (
+        data,
+        data_scaled,
+        data_df[TARGET_COLUMNS],
+        min_max_scaler,
+        min_max_scaler_per_column,
+        FEATURE_COLUMNS,
+        categorical_columns,
+        numeric_columns,
+        one_hot_encode_features,
+        features_ranges,
+        feature_types
+    )
+
+def load_heloc():
+    data_df = pd.read_csv(f"{ugce_dir}/data/heloc.csv")
+    data_df = data_df[(data_df.iloc[:, 1:] >= 0).all(axis=1)]
+    data_df = data_df.reset_index(drop=True)
+    first_column = data_df.pop(data_df.columns[0])
+    FEATURE_COLUMNS = data_df.columns
+    data_df.insert(len(data_df.columns), first_column.name, first_column)
+    TARGET_COLUMNS = "RiskPerformance"
+    continuous_featues = ['MSinceOldestTradeOpen',
+    'AverageMInFile',
+    'NetFractionInstallBurden',
+    'NetFractionRevolvingBurden',
+    'MSinceMostRecentTradeOpen',
+    'PercentInstallTrades',
+    'PercentTradesWBalance',
+    'NumTotalTrades',
+    'MSinceMostRecentDelq',
+    'NumSatisfactoryTrades',
+    'PercentTradesNeverDelq',
+    'ExternalRiskEstimate']
+    data, numeric_columns, categorical_columns, one_hot_encode_features, feature_types = preprocess_dataset(data_df, continuous_features=continuous_featues)
+    min_max_scaler = preprocessing.MinMaxScaler()
+    data_scaled = min_max_scaler.fit_transform(data[FEATURE_COLUMNS].values)
+    features_ranges = {}
+    for col in data.columns:
+        if col in one_hot_encode_features or col in categorical_columns:
+            features_ranges[col] = [int(value) if isinstance(value, np.integer) else value for value in data[col].unique()]
+        else:
+            min_val = data[col].min()
+            max_val = data[col].max()
+            features_ranges[col] = (int(min_val), int(max_val)) if feature_types[col] == 'int' else (float(min_val), float(max_val))
+    min_max_scaler_per_column = {}
+    for col in data.columns:
+        scl = preprocessing.MinMaxScaler()
+        min_max_scaler_per_column[col] = scl.fit(data[col].values.reshape(-1, 1))
+    
+    return (data,
+        data_scaled,
+        data_df[TARGET_COLUMNS],
+        min_max_scaler,
+        min_max_scaler_per_column,
         FEATURE_COLUMNS,
         categorical_columns,
         numeric_columns,
@@ -131,7 +219,6 @@ def load_compas():
     data = X
     data = data.drop(['c_charge_desc', 'age_cat'], axis=1)
     data, numeric_columns, categorical_columns, one_hot_encode_features, feature_types = preprocess_dataset(data, continuous_features=[])
-    data_df_copy = data.copy()
     y = pd.DataFrame(y, columns=[TARGET_COLUMNS])
     FEATURE_COLUMNS = data.columns
     y, _, _, _, _ = preprocess_dataset(y, continuous_features=[])
@@ -140,19 +227,22 @@ def load_compas():
     features_ranges = {}
     for col in data.columns:
         if col in one_hot_encode_features or col in categorical_columns:
-            # For categorical and one-hot encoded features, return unique values as native Python types
             features_ranges[col] = [int(value) if isinstance(value, np.integer) else value for value in data[col].unique()]
         else:
-            # For numerical features, return the min and max as native Python types
             min_val = data[col].min()
             max_val = data[col].max()
             features_ranges[col] = (int(min_val), int(max_val)) if feature_types[col] == 'int' else (float(min_val), float(max_val))
+    min_max_scaler_per_column = {}
+    for col in data.columns:
+        scl = preprocessing.MinMaxScaler()
+        min_max_scaler_per_column[col] = scl.fit(data[col].values.reshape(-1, 1))
     
-    # Convert the data to list format instead of NumPy array
     return (
-        data_scaled,  # Convert features to list
-        y.values,   # Convert target to list
+        data,
+        data_scaled,
+        y.values,
         min_max_scaler,
+        min_max_scaler_per_column,
         FEATURE_COLUMNS,
         categorical_columns,
         numeric_columns,

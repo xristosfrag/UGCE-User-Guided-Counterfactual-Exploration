@@ -41,15 +41,24 @@ from utils import f_model, display_cfe_comparison,\
 from feature_weights import get_feature_weights
 
 class Individual:
-    def __init__(self, genes):
-        self.genes = genes
-        self.fitness = None
-        
-    def set_fittness(self, fitness):
+    def __init__(self, genes, fitness=None):
+        self.genes = np.array(genes, dtype=np.float64)
+        self.fitness = fitness
+        self.normalized = None
+        self.decoded = None
+              
+    def set_fitness(self, fitness):
         self.fitness = fitness
         
+    def copy(self):
+        """Creates a deep copy of the Individual instance."""
+        new_individual = Individual(self.genes.copy(), self.fitness)
+        new_individual.normalized = copy.deepcopy(self.normalized)  
+        new_individual.decoded = copy.deepcopy(self.decoded)
+        return new_individual
+        
     def __repr__(self):
-        return f"Individual({self.genes}, fitness={self.fitness})"
+        return f"Individual(genes={self.genes}, fitness={self.fitness}, normalized={self.normalized}, decoded={self.decoded})"
 
 class UGCE:
     def __init__(self, model, scaler, feature_columns, categorical_columns,\

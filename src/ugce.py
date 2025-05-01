@@ -127,19 +127,23 @@ class UGCE:
         Returns:
         - List of selected individuals.
         """
-        total_fitness = sum(ind.fitness for ind in population)
-        selected = []
-        for _ in range(k):
-            pick = random.uniform(0, total_fitness)
-            current = 0
-            for ind in population:
-                current += ind.fitness
-                if current > pick:
-                    selected.append(ind)
-                    break
-        return selected
+        selected_roulette = []
+        min_fitness = min(ind.fitness for ind in population)
+        offset = abs(min_fitness) if min_fitness < 0 else 0
+        adjusted_population = [ind.fitness + offset for ind in population]
+        total_adjusted_fitness = sum(adjusted_population)
 
-    def rank_selection(population, k):
+        for _ in range(k):
+            pick = random.uniform(0, total_adjusted_fitness)
+            current = 0
+            for ind, adjusted_fitness in zip(population, adjusted_population):
+                current += adjusted_fitness
+                if current > pick:
+                    selected_roulette.append(ind)
+                    break
+        return selected_roulette
+
+    def rank_selection(self, population, k):
         """
         Perform rank-based selection from a population.
 
@@ -157,11 +161,8 @@ class UGCE:
         """
         sorted_population = sorted(population, key=lambda ind: ind.fitness, reverse=True)
         
-        # Assign selection probabilities based on rank (linearly decreasing)
-        total_ranks = len(population) * (len(population) + 1) / 2  # Sum of series 1 to N
+        total_ranks = len(population) * (len(population) + 1) / 2
         rank_probabilities = [(len(population) - i) / total_ranks for i in range(len(population))]
-        
-        # Select individuals using roulette wheel selection
         selected = random.choices(sorted_population, weights=rank_probabilities, k=k)
         return selected
 
@@ -180,21 +181,60 @@ class UGCE:
         Returns:
         - List of selected individuals.
         """
-        total_fitness = sum(ind.fitness for ind in population)
-        distance = total_fitness / k
-        start_point = random.uniform(0, distance)
-        selected = []
-        for i in range(k):
-            current = start_point + i * distance
-            cumulative_fitness = 0
-            for ind in population:
-                cumulative_fitness += ind.fitness
-                if cumulative_fitness >= current:
-                    selected.append(ind)
-                    break
-        return selected
+        selected_sus = []
+        min_fitness = min(ind.fitness for ind in population)
+        offset = abs(min_fitness) if min_fitness < 0 else 0
+        adjusted_population = [ind.fitness + offset for ind in population]
 
-    def explain_instance(self, x, constraints=None, immutables=None,\
+        total_adjusted_fitness = sum(adjusted_population)
+        distance = total_adjusted_fitness / k
+        start = random.uniform(0, distance)
+        pointers = [start + i * distance for i in range(k)]
+
+        for pointer in pointers:
+            cumulative = 0
+            for ind, adjusted_fitness in zip(population, adjusted_population):
+                cumulative += adjusted_fitness
+                if cumulative >= pointer:
+                    selected_sus.append(ind)
+                    break
+        return selected_sus
+
+    def fifty_percent_best_selection(self, population, k):
+        """
+        Perform 50% best selection from a population.
+
+        This method selects the top 50% of individuals based on their fitness.
+
+        Parameters:
+        - population: List of individuals from which to select.
+        - k: Number of individuals to select.
+
+        Returns:
+        - List of selected individuals.
+        """
+        return sorted(population, key=lambda ind: ind.fitness, reverse=True)[:k]
+    
+    def update_individuals(self, cfes):
+        """
+        Update the normalized and decoded gsenes of the individuals.
+        
+        Parameters:
+        - cfes: List of individuals to update.
+
+        Returns:
+        - None.
+        """
+        all_genes = np.array([ind.genes for ind in cfes])
+        normalized_genes = normalize_data(all_genes, self.feature_names, self.dataset)
+        decoded_genes_df = pd.DataFrame(decode_label_encoded_data(all_genes, self.feature_names,
+                                    self.categorical_columns, self.categorical_label_encoders),
+                                    columns=self.feature_names)
+        for ind, norm, (_, decoded) in zip(cfes, normalized_genes, decoded_genes_df.iterrows()):
+            ind.normalized = norm
+            ind.decoded = decoded.values
+   
+    def explain_instances(self, instances_to_explain, constraints=None, immutables=None,\
         diversity_top_k=1, evaluation=False, dynamic_constraints=False,\
         initial_population_variability=0.2, data_distribution=True,\
             seed_number=42, fix_population=True, complete_random=True, population_size_dynamic=10,\

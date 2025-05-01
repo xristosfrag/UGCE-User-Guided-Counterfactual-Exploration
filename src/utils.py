@@ -1,10 +1,13 @@
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
-import pandas as pd
+from sklearn.calibration import LabelEncoder
+from sklearn.preprocessing import MinMaxScaler
+from scipy.spatial.distance import pdist
+from sklearn.pipeline import Pipeline
 from prettytable import PrettyTable
-
-# transform a single individual from the original space to the scaled space
+from scipy.spatial import distance
+import pandas as pd
+import numpy as np
 def transform_individual(individual, scaler):
     return scaler.transform(individual.reshape(1, -1))
 

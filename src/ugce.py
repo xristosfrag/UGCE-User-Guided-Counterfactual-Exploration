@@ -960,7 +960,7 @@ class UGCE:
             ind.fitness = fitness
         return population, max(fitness_scores)
     
-    def get_closest_positive_instances_optimized(self, population_size=100):
+    def get_closest_positive_instances(self, population_size=100):
         """
         Find the closest positive instances to a given negative instance.
         """
@@ -984,16 +984,27 @@ class UGCE:
         closest_positive_instances = self.dataset.loc[closest_positive_indices]
         return [Individual(genes=row.tolist()) for _, row in closest_positive_instances.iterrows()], population_around_instance_time
 
-    def initialize_population(self, population_size=100):
-        population = []
-        unique_individuals = set()
-        while len(population) < population_size:
-            new_individual = self.generate_individual()
-            genes_tuple = tuple(new_individual.genes)
-            if genes_tuple not in unique_individuals:
-                population.append(new_individual)
-                unique_individuals.add(genes_tuple)
-        return population
+    def initialize_population(self, population_size=100, initial_population_strategy="kdtree"):
+        if initial_population_strategy == "kdtree":
+            closest_positive_instances, population_around_instance_time =\
+                self.get_closest_positive_instances(population_size)
+            population = self.update_violators(closest_positive_instances)
+            return population, 0, (time() - population_around_instance_time)
+        
+        elif initial_population_strategy == "random":
+            population = []
+            population_around_instance_time = time()
+            unique_individuals = set()
+            while len(population) < population_size:
+                new_individual = self.generate_individual()
+                genes_tuple = tuple(new_individual.genes)
+                if genes_tuple not in unique_individuals:
+                    population.append(new_individual)
+                    unique_individuals.add(genes_tuple)
+            return population, 0, (time() - population_around_instance_time) 
+        else:
+            sys.exit(f"Invalid initial population strategy: {self.initial_population_strategy}.")
+
 
     def evolve(self):
         # print("Initial seed number: ", self.seed_number + self.seed_update_number)

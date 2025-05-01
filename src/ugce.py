@@ -1,11 +1,14 @@
-import random
-import numpy as np
-from functools import partial
+from scipy.spatial.distance import pdist
+from sklearn.neighbors import KDTree
 from collections import Counter
 from copy import deepcopy
-from time import time
 from tqdm import tqdm
-
+from time import time
+import pandas as pd
+import numpy as np
+import random
+import heapq
+import copy
 import sys
 import os
 
@@ -30,7 +33,12 @@ sys.path.append(ugce_dir)
 sep = get_system_slash()
 sys.path.append(ugce_dir + get_system_slash() + 'src')
 
-from utils import transform_individual, inverse_transform_individual, f_model, display_cfe_comparison
+from utils import f_model, display_cfe_comparison,\
+    required_attributes, initial_label_encode_data, label_encode_data,\
+    decode_label_encoded_data, normalize_data, safe_divide,\
+    compute_distances_in_blocks, fast_max_l2_l1_distance
+
+from feature_weights import get_feature_weights
 
 class Individual:
     def __init__(self, genes):

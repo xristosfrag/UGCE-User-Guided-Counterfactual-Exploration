@@ -300,157 +300,369 @@ class UGCE:
         - **List of best individuals for each instance** (*list*): Counterfactual explanations found during evolution.
         """
         self.initial_population_strategy = initial_population_strategy
-            self.seed_number = seed_number
-            self.seed_update_number = 0
-            # Reset seeds to ensure reproducibility in each call
-            self.set_seed(self.seed_number)
-            
-        self.original_prediction = f_model(x, self.model)
-        self.constraints = constraints if constraints else {}
-        self.immutables = immutables if immutables else []
-        self.setup_constraints()
-        best_individuals, elapsed_time_not_dynamic, unique_applicable_cfes_to_unique_individuals_percentage = self.evolve()
-        if len(best_individuals) == 0:
-            print(f"No solution found for the instance {self.inverse_transformed_x_features}.")
-            return None
-        else:
-            best_individual = best_individuals[0]
-            print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
-        return best_individual
-   
-    def explain_instances(self, X, constraints=None, immutables=None,\
-        diversity_top_k=1, evaluation=False, dynamic_constraints=False,\
-        initial_population_variability=0.2, data_distribution=True,\
-            seed_number=42, fix_population=True, complete_random=True, population_size_dynamic=10,\
-            num_generations=50, population_size=50, regeneration_tries=2, num_parents=10,\
-            selection_method="tournament", tournsize=3,\
-            early_stopping_iterations=3, elite_ratio=0.1, \
-                lambda1=1, lambda2=1, lambda3=1, lambda4=1, lambda5=1, cxpb=0.5, crossover_points=3, mutpb=0.2,\
-                updated_constraints=None, automatic_user_acceptance=True, verbose=False,\
-                running_times_per_instance=10):
-        """
-        Explain the instances by evolving counterfactual examples.
-        """
-        self.X = X
-        self.diversity_top_k = diversity_top_k
+        self.seed_number = seed_number
+        self.set_seed(self.seed_number)
+
+        prepare_instances_time = time()
+        self.instances_to_explain = label_encode_data(instances_to_explain, self.feature_names, self.categorical_columns,\
+                                                        self.categorical_label_encoders)
+        self.instances_to_explain_numpy = instances_to_explain.to_numpy()
+        self.instances_to_explain_normalized = normalize_data(self.instances_to_explain, self.feature_names, self.dataset)
+        prepare_instances_time = time() - prepare_instances_time
+        
+        population_generation_time_global = 0
+        if self.initial_population_strategy == "kdtree":
+            population_generation_time_global = time()
+            # Build KDTree for the dataset
+            ## KDTree requires data to be numerical, so provide the fully transformed dataset.
+            #  and query with the fully transformed instance
+            ## KDTree should only be fitted and queried with the numerical columns
+            ## if the datasat is very large, sample the dataset to build the KDTree
+            self.kdTree_dataset = None
+            if self.dataset_length >= 60000:
+                self.kdTree_dataset = self.dataset.sample(n=60000, random_state=self.seed_number)
+            else:
+                self.kdTree_dataset = self.dataset
+            self.kdTree = KDTree(self.kdTree_dataset)
+            population_generation_time_global = time() - population_generation_time_global
+
         self.evaluation = evaluation
         self.dynamic_constraints = dynamic_constraints
         self.initial_population_variability = initial_population_variability
         self.num_generations = num_generations
-        self.early_stopping_iterations = early_stopping_iterations
-        self.elite_ratio = elite_ratio # Percentage of individuals to retain from both current and offspring population
+        if early_stopping_iterations == -1:
+            self.early_stopping_iterations = num_generations
+        else:
+            self.early_stopping_iterations = early_stopping_iterations
+        if thresh == -1:
+            self.thresh = 1e-2
+        else:
+            self.thresh = thresh
+        self.elite_ratio = elite_ratio
         self.data_distribution = data_distribution
 
-        self.fix_population = fix_population
+        self.strategy = strategy
         self.population_size_dynamic = population_size_dynamic
-        self.complete_random = complete_random
         self.num_generations = num_generations
-        self.population_size = population_size
-        self.regeneration_tries = regeneration_tries
+        self.population_size = population_size * cfes_requested
+        self.regeneration_tries_intermediate = regeneration_tries_intermediate
+        self.regeneration_tries_intermediate_after_updating_constraints = regeneration_tries_intermediate_after_updating_constraints
         self.num_parents = num_parents
         self.selection_method = selection_method
         self.tournsize = tournsize
 
-        self.lambda1 = lambda1
-        self.lambda2 = lambda2
-        self.lambda3 = lambda3
-        self.lambda4 = lambda4
-        self.lambda5 = lambda5
         self.cxpb = cxpb
         self.crossover_points = crossover_points
         self.mutpb = mutpb
+        self.distance_metric = distance_metric
         self.updated_constraints = updated_constraints
+        self.multistep_updated_constraints = multistep_updated_constraints
         self.automatic_user_acceptance = automatic_user_acceptance
         self.verbose = verbose
-        if not self.complete_random:
-            self.seed_number = seed_number
-            self.seed_update_number = 0
-            # Reset seeds to ensure reproducibility in each call
-            self.set_seed(self.seed_number)
-
-        self.original_predictions = {f_model(x, self.model) for x in X}
+        self.normalized_fitness = normalized_fitness
         self.constraints = constraints if constraints else {}
+        if self.constraints == {} or self.constraints is None:
+            self.lambda1 = initial_lambdas_without_constraints["lambda1"]
+            self.lambda2 = initial_lambdas_without_constraints["lambda2"]
+            self.lambda3 = initial_lambdas_without_constraints["lambda3"]
+        else:
+            self.lambda1 = initial_lambdas_with_constraints["lambda1"]
+            self.lambda2 = initial_lambdas_with_constraints["lambda2"]
+            self.lambda3 = initial_lambdas_with_constraints["lambda3"]
+        self.lambdas_after_updating_constraints = lambdas_after_updating_constraints
+        self.lambdas_reweighting_after_updating_constraints_and_some_generations = lambdas_reweighting_after_updating_constraints_and_some_generations
+        self.reweighting_lambdas_after_generations = reweighting_lambdas_after_generations
         self.immutables = immutables if immutables else []
         self.setup_constraints()
                
         results_X = {}
         iteration = 0
 
-        for i, x in tqdm(enumerate(X), desc="Explaining instances", total=len(X)):
-            self.x = x
-            self.inverse_transformed_x_indexes, self.inverse_transformed_x_features = inverse_transform_individual(self.x, self.scaler, self.feature_columns)
-            if self.verbose:
-                if iteration > 0:
-                    print(f"\n\nExplaining instance {self.inverse_transformed_x_features}")
-                else:
-                    print(f"Explaining instance {self.inverse_transformed_x_indexes}")
+        empty_intermediate_counter = 0
 
+        for i, x in tqdm(instances_to_explain.iterrows(), total=instances_to_explain.shape[0]):
+            num_generations = 0
+
+            time_intermediate_from_scratch = time()
+            self.x = x
+            self.x_dict = self.x.to_dict()
+            self.x_numpy = self.x.to_numpy()
+            self.x_label_encoded = self.instances_to_explain.loc[i].to_frame().T
+            self.x_label_encoded_numpy = self.x_label_encoded.to_numpy()[0]
+            self.normalized_x = self.instances_to_explain_normalized.loc[i].to_frame().T
+            self.normalized_x_numpy = self.normalized_x.to_numpy()[0]
+            
+            time_intermediate_from_scratch = time() - time_intermediate_from_scratch
             results = {
-                "Instance": self.inverse_transformed_x_indexes,
-                "Best_cfe": [],
-                "Best_cfe_fitness": 0,
-                "Best_cfe_distance": 0,
-                
-                "Avg_elapsed_time": 0,
-                "Avg_Applicable_cfes_number": 0,
-                "Cfes_distances": [],
-                "Avg_cfes_distance": 0,
-                "Unique_applicable_cfes_to_unique_individuals_percentage": 0,
-                "Cfes": [],
-                "At_least_one_cfe_found_percentage": 0
+                "Single_run": {
+                    "Original_Instance": self.x_numpy,
+                    "Encoded_Instance": self.x_label_encoded_numpy,
+                    "Normalized_Instance": self.normalized_x_numpy,
+                    "Best_cfe": np.array([]),
+                    "Encoded_Best_cfe": np.array([]),
+                    "Normalized_Best_cfe": np.array([]),
+                    "Best_cfe_fitness": -np.inf,
+                    "Best_cfe_distance": np.inf,
+                    "Best_cfe_l2_distance": np.inf,
+                    "Best_cfe_l1_distance": np.inf,
+                    "Best_cfe_weighted_l1_distance": np.inf,
+                    "Best_cfe_sparsity": None,
+
+                    "Intermediate_best_cfe": [],
+                    "Encoded_Intermediate_best_cfe": [],
+                    "Normalized_Intermediate_best_cfe": [],
+                    "Intermediate_best_cfe_fitness": -np.inf,
+                    "Intermediate_best_cfe_distance": np.inf,
+                    "Intermediate_best_cfe_l2_distance": np.inf,
+                    "Intermediate_best_cfe_l1_distance": np.inf,
+                    "Intermediate_best_cfe_weighted_l1_distance": np.inf,
+                    "Intermediate_best_cfe_sparsity": None,
+                    
+                    "Distance_between_best_and_intermediate_best_cfes": np.inf,
+                    
+                    "Applicable_cfes_number": None,
+                    "Intermediate_applicable_cfes_number": None,
+
+                    "Time_intermediate_from_scratch": None,
+                    "Time_dynamic": None,
+
+                    "Cfes": [],
+                    "Num_generations": None,
+                },
+                "Multiple_runs": {
+                    "Avg_Best_cfe_distance": 0,
+                    "Avg_Best_cfe_l2_distance": 0,
+                    "Avg_Best_cfe_l1_distance": 0,
+                    "Avg_Best_cfe_weighted_l1_distance": 0,
+                    "Avg_Best_cfe_sparsity": 0,
+
+                    "Avg_Intermediate_best_cfe_distance": 0,
+                    "Avg_Intermediate_best_cfe_l2_distance": 0,
+                    "Avg_Intermediate_best_cfe_l1_distance": 0,
+                    "Avg_Intermediate_best_cfe_weighted_l1_distance": 0,
+                    "Avg_Intermediate_best_cfe_sparsity": 0,
+
+                    "Avg_applicable_cfes_number": 0,
+                    "Avg_intermediate_applicable_cfes_number": 0,
+                    "Avg_number_of_generations": 0,
+
+                    "Avg_distance_between_best_and_intermediate_best_cfes": 0,
+                    "Avg_l2_distance_between_best_and_intermediate_best_cfes": 0,
+                    "Avg_l1_distance_between_best_and_intermediate_best_cfes": 0,
+                    "Avg_weighted_l1_distance_between_best_and_intermediate_best_cfes": 0,
+
+                    "Times_that_at_least_one_cfe_found_percentage": 0,
+                    "Times_that_at_least_one_intermediate_cfe_found_percentage": 0,
+                    
+                    "Avg_Time_intermediate_from_scratch": 0,
+                    "Avg_Time_dynamic": 0
+                }
             }
-            total_cfes_found = 0
-            elapsed_times = []
-            unique_applicable_percentages = []
-            cfes_distances_list = []
-            cfes_list = []
-            at_least_one_cfe_count = 0
+            times_intermediate_and_final_cfe_found = 0
+            population_generation_time_per_run = []
 
             for _ in range(running_times_per_instance):
-                self.original_prediction = f_model(x, self.model)
-                best_individuals, elapsed_time, unique_applicable_percentage = self.evolve()
+                time_intermediate_from_scratch_per_run = time()
+                self.original_prediction = f_model(self.x.to_frame().T, self.model)
+                time_intermediate_from_scratch_per_run = time() - time_intermediate_from_scratch_per_run
 
-                if len(best_individuals) > 0:
-                    best_individual = best_individuals[0]
-                    if self.verbose:
-                        print(f"Best cfe is: {best_individual.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual.genes), self.scaler), self.model)}")
-                    # Update best CFE if current one is better
-                    if len(results['Best_cfe']) == 0 or best_individual.fitness > results['Best_cfe_fitness']:
-                        results['Best_cfe'] = best_individual.genes
-                        results['Best_cfe_fitness'] = best_individual.fitness
-                        results['Best_cfe_distance'] = self.distance(best_individual.genes)
-                    # Aggregate statistics for averages
-                    total_cfes_found += len(best_individuals)
-                    elapsed_times.append(elapsed_time)
-                    cfes_distances_list.extend([self.distance(best_individual.genes) for best_individual in best_individuals])
-                    cfes_list.extend([best_individual.genes for best_individual in best_individuals])
-                    unique_applicable_percentages.append(unique_applicable_percentage)
-                    at_least_one_cfe_count += 1
+                unique_applicable_cfes_intermediate, cfes, population_generation_time, elapsed_time_intermediate_from_scratch,\
+                      time_intermediate_dynamic, num_generations, _ = self.evolve()
+                time_intermediate_from_scratch_per_run = time_intermediate_from_scratch_per_run + elapsed_time_intermediate_from_scratch + time_intermediate_from_scratch
+                population_generation_time_per_run.append(population_generation_time)
+                len_cfes = len(cfes)
+                if len_cfes > 0:
+                    # Update individuals with normalized and decoded genes
+                    self.update_individuals(cfes)
+                    best_individual = None
+                    #############################################################
+                    ############## STATS ABOUT THE FINAL SOLUTION ###############
+                    #############################################################
+                    if len_cfes == 1:
+                        best_individual = cfes[0]
+                        results["Single_run"]['Best_cfe'] = best_individual.decoded
+                        results["Single_run"]['Encoded_Best_cfe'] = best_individual.genes
+                        results["Single_run"]['Best_cfe_fitness'] = best_individual.fitness
+                        normalized_individual = best_individual.normalized
+                        results["Single_run"]["Normalized_Best_cfe"] = normalized_individual
 
-                self.constraints, self.immutables = {}, []
+                        l2_dist = self.normalized_l2_distance(normalized_individual)
+                        results["Single_run"]['Best_cfe_l2_distance'] = l2_dist
+                        l1_dist = self.normalized_l1_distance(normalized_individual)
+                        results["Single_run"]['Best_cfe_l1_distance'] = l1_dist
+                        weighted_l1_dist = self.compute_proximity_loss_dice(normalized_individual)
+                        results["Single_run"]['Best_cfe_weighted_l1_distance'] = weighted_l1_dist
 
-            ## If running times per instance is more than 1 then calculate the average of the results
-            if running_times_per_instance > 1:
-                results['Avg_elapsed_time'] = sum(elapsed_times) / running_times_per_instance
-                results['Avg_Applicable_cfes_number'] = total_cfes_found / running_times_per_instance
-                results['Cfes_distances'] = cfes_distances_list
-                results['Avg_cfes_distance'] = (sum(cfes_distances_list) / len(cfes_distances_list)) / running_times_per_instance
-                results['Avg_Unique_applicable_cfes_to_unique_individuals_percentage'] = sum(unique_applicable_percentages) / running_times_per_instance
-                results['Cfes'] = cfes_list
-                results['Times_that_at_least_one_cfe_found_percentage'] = at_least_one_cfe_count / running_times_per_instance
-            
-            ## If running times per instance is 1 then return the results as they are
+                        if self.distance_metric == "l2":
+                            results["Single_run"]['Best_cfe_distance'] = l2_dist
+                            results["Multiple_runs"]['Avg_Best_cfe_distance'] += l2_dist
+                        elif self.distance_metric == "l1":
+                            results["Single_run"]['Best_cfe_distance'] = l1_dist
+                            results["Multiple_runs"]['Avg_Best_cfe_distance'] += l1_dist
+                        elif self.distance_metric == "weighted_l1":
+                            results["Single_run"]['Best_cfe_distance'] = weighted_l1_dist
+                            results["Multiple_runs"]['Avg_Best_cfe_distance'] += weighted_l1_dist
+
+                        sparsity = self.normalized_sparsity(normalized_individual)
+                        results["Single_run"]["Best_cfe_sparsity"] = sparsity
+                        
+                        
+                        results["Multiple_runs"]['Avg_Best_cfe_sparsity'] += \
+                            results["Single_run"]["Best_cfe_sparsity"]
+                    else:
+                        best_ind = None
+                        best_cfe_distance = np.inf
+
+                        for ind in cfes:
+                            dist = np.inf
+                            normalized_individual = ind.normalized
+                            if self.distance_metric == "l2":
+                                dist = self.normalized_l2_distance(normalized_individual)
+                            elif self.distance_metric == "l1":
+                                dist = self.normalized_l1_distance(normalized_individual)
+                            elif self.distance_metric == "weighted_l1":
+                                dist = self.compute_proximity_loss_dice(normalized_individual)
+                            else:
+                                raise ValueError("Error: Distance metric not supported.")
+                            if dist < best_cfe_distance:
+                                best_cfe_distance = dist
+                                best_ind = ind.copy()
+                        results["Single_run"]['Best_cfe'] = best_ind.decoded
+                        results["Single_run"]['Best_cfe_fitness'] = best_ind.fitness
+                        results["Single_run"]["Encoded_Best_cfe"] = best_ind.genes
+                        results["Single_run"]["Normalized_Best_cfe"] = best_ind.normalized
+                        results["Single_run"]['Best_cfe_distance'] = best_cfe_distance
+                        results["Single_run"]["Best_cfe_l2_distance"] = self.normalized_l2_distance(best_ind.normalized)
+                        results["Single_run"]["Best_cfe_l1_distance"] = self.normalized_l1_distance(best_ind.normalized)
+                        results["Single_run"]["Best_cfe_weighted_l1_distance"] = self.compute_proximity_loss_dice(best_ind.normalized)
+                        sparsity = self.normalized_sparsity(best_ind.normalized)
+                        results["Single_run"]["Best_cfe_sparsity"] = sparsity
+
+                        results["Multiple_runs"]['Avg_Best_cfe_distance'] += best_cfe_distance
+                        results["Multiple_runs"]['Avg_Best_cfe_l2_distance'] += results["Single_run"]["Best_cfe_l2_distance"]
+                        results["Multiple_runs"]['Avg_Best_cfe_l1_distance'] += results["Single_run"]["Best_cfe_l1_distance"]
+                        results["Multiple_runs"]['Avg_Best_cfe_weighted_l1_distance'] += results["Single_run"]["Best_cfe_weighted_l1_distance"]
+                        results["Multiple_runs"]['Avg_Best_cfe_sparsity'] += sparsity
+
+                    results["Single_run"]['Applicable_cfes_number'] = len_cfes
+                    results["Single_run"]['Num_generations'] = num_generations
+
+                    results["Multiple_runs"]['Avg_applicable_cfes_number'] += len_cfes
+                    results["Multiple_runs"]['Avg_number_of_generations'] += num_generations
+                    
+                    results["Single_run"]['cfes'] = cfes
+                    results["Single_run"]['Time_intermediate_from_scratch'] = time_intermediate_from_scratch_per_run
+                    results["Multiple_runs"]['Avg_Time_intermediate_from_scratch'] += time_intermediate_from_scratch_per_run
+                    results["Multiple_runs"]['Times_that_at_least_one_cfe_found_percentage'] += 1
+                    ###################################################################
+                    ################### INTERMEDIATE SOLUTION STATS ###################
+                    ###################################################################
+                    if self.dynamic_constraints:
+                        unique_applicable_cfes_intermediate_len = len(unique_applicable_cfes_intermediate)
+                        if unique_applicable_cfes_intermediate_len > 0:
+                            # Update individuals with normalized and decoded genes
+                            self.update_individuals(unique_applicable_cfes_intermediate)
+                            best_ind_intermid = None
+                            best_cfe_distance = np.inf
+
+                            for ind in unique_applicable_cfes_intermediate:
+                                normalized_individual = ind.normalized
+                                dist = np.inf
+                                if self.distance_metric == "l2":
+                                    dist = self.normalized_l2_distance(normalized_individual)
+                                elif self.distance_metric == "l1":
+                                    dist = self.normalized_l1_distance(normalized_individual)
+                                elif self.distance_metric == "weighted_l1":
+                                    dist = self.compute_proximity_loss_dice(normalized_individual)
+                                if dist < best_cfe_distance:
+                                    best_cfe_distance = dist
+                                    best_ind_intermid = ind.copy()
+
+                            results["Single_run"]['Intermediate_best_cfe'] = best_ind_intermid.decoded
+                            results["Single_run"]['Intermediate_best_cfe_fitness'] = best_ind_intermid.fitness
+                            results["Single_run"]["Scaled_Intermediate_best_cfe"] = best_ind_intermid.genes
+                            results["Single_run"]["Normalized_Intermediate_best_cfe"] = best_ind_intermid.normalized
+                            
+                            results["Single_run"]['Intermediate_best_cfe_distance'] = best_cfe_distance
+                            results["Single_run"]["Intermediate_best_cfe_l2_distance"] = self.normalized_l2_distance(best_ind_intermid.normalized)
+                            results["Single_run"]["Intermediate_best_cfe_l1_distance"] = self.normalized_l1_distance(best_ind_intermid.normalized)
+                            results["Single_run"]["Intermediate_best_cfe_weighted_l1_distance"] = self.compute_proximity_loss_dice(best_ind_intermid.normalized)
+                            sparsity = self.normalized_sparsity(best_ind_intermid.normalized)
+                            results["Single_run"]["Intermediate_best_cfe_sparsity"] = sparsity
+
+                            results["Multiple_runs"]['Avg_Intermediate_best_cfe_distance'] += best_cfe_distance
+                            results["Multiple_runs"]['Avg_Intermediate_best_cfe_l2_distance'] += results["Single_run"]["Intermediate_best_cfe_l2_distance"]
+                            results["Multiple_runs"]['Avg_Intermediate_best_cfe_l1_distance'] += results["Single_run"]["Intermediate_best_cfe_l1_distance"]
+                            results["Multiple_runs"]['Avg_Intermediate_best_cfe_weighted_l1_distance'] += results["Single_run"]["Intermediate_best_cfe_weighted_l1_distance"]
+                            results["Multiple_runs"]['Avg_Intermediate_best_cfe_sparsity'] += sparsity
+
+                            results["Single_run"]['Intermediate_applicable_cfes_number'] = unique_applicable_cfes_intermediate_len
+                            results["Multiple_runs"]['Times_that_at_least_one_intermediate_cfe_found_percentage'] += 1
+                        
+                            
+                            times_intermediate_and_final_cfe_found += 1
+                            l2_distance_between_best_and_intermediate_best_cfes = self.normalized_l2_distance(\
+                                    results["Single_run"]['Normalized_Best_cfe'], results["Single_run"]['Normalized_Intermediate_best_cfe'])
+                            l1_distance_between_best_and_intermediate_best_cfes = self.normalized_l1_distance(\
+                                    results["Single_run"]['Normalized_Best_cfe'], results["Single_run"]['Normalized_Intermediate_best_cfe'])
+                            weighted_l1_distance_between_best_and_intermediate_best_cfes = self.compute_proximity_loss_dice(\
+                                    results["Single_run"]['Normalized_Best_cfe'], results["Single_run"]['Normalized_Intermediate_best_cfe'])
+
+                            if self.distance_metric == "l2":
+                                results["Single_run"]["Distance_between_best_and_intermediate_best_cfes"] = l2_distance_between_best_and_intermediate_best_cfes
+                                results["Multiple_runs"]["Avg_distance_between_best_and_intermediate_best_cfes"] += l2_distance_between_best_and_intermediate_best_cfes
+                            elif self.distance_metric == "l1":
+                                results["Single_run"]["Distance_between_best_and_intermediate_best_cfes"] = l1_distance_between_best_and_intermediate_best_cfes
+                                results["Multiple_runs"]["Avg_distance_between_best_and_intermediate_best_cfes"] += l1_distance_between_best_and_intermediate_best_cfes
+                            elif self.distance_metric == "weighted_l1":
+                                results["Single_run"]["Distance_between_best_and_intermediate_best_cfes"] = weighted_l1_distance_between_best_and_intermediate_best_cfes
+                                results["Multiple_runs"]["Avg_distance_between_best_and_intermediate_best_cfes"] += weighted_l1_distance_between_best_and_intermediate_best_cfes
+                            
+                            results["Single_run"]["L2_distance_between_best_and_intermediate_best_cfes"] = l2_distance_between_best_and_intermediate_best_cfes
+                            results["Single_run"]["L1_distance_between_best_and_intermediate_best_cfes"] = l1_distance_between_best_and_intermediate_best_cfes
+                            results["Single_run"]["Weighted_L1_distance_between_best_and_intermediate_best_cfes"] = weighted_l1_distance_between_best_and_intermediate_best_cfes
+                            
+                            results["Multiple_runs"]["Avg_l2_distance_between_best_and_intermediate_best_cfes"] += l2_distance_between_best_and_intermediate_best_cfes
+                            results["Multiple_runs"]["Avg_l1_distance_between_best_and_intermediate_best_cfes"] += l1_distance_between_best_and_intermediate_best_cfes
+                            results["Multiple_runs"]["Avg_weighted_l1_distance_between_best_and_intermediate_best_cfes"] += weighted_l1_distance_between_best_and_intermediate_best_cfes
+                        else:
+                            empty_intermediate_counter += 1
+
+                        results["Single_run"]["Time_dynamic"] = time_intermediate_dynamic
+                        results["Multiple_runs"]["Avg_Time_dynamic"] += results["Single_run"]["Time_dynamic"] 
+                
+                if self.dynamic_constraints:
+                    self.constraints, self.immutables = {}, []
+                    self.setup_constraints()
+            if self.initial_population_strategy != "kdtree":
+                results_X["population_generation_time"] = np.median(population_generation_time_per_run)
             else:
-                results['Avg_elapsed_time'] = elapsed_times[0] if elapsed_times else 0
-                results['Avg_Applicable_cfes_number'] = total_cfes_found / running_times_per_instance
-                results['Cfes_distances'] = cfes_distances_list
-                results['Avg_cfes_distance'] = (sum(cfes_distances_list) / len(cfes_distances_list)) if cfes_distances_list else 0
-                results['Avg_Unique_applicable_cfes_to_unique_individuals_percentage'] = unique_applicable_percentages[0] if unique_applicable_percentages else 0
-                results['Cfes'] = cfes_list
-                results['Times_that_at_least_one_cfe_found_percentage'] = at_least_one_cfe_count
+                results_X["population_generation_time"] = population_generation_time_global
+            results_X["prepare_instances_time"] = prepare_instances_time
+
+            if running_times_per_instance > 1:
+                results["Multiple_runs"]["Avg_Best_cfe_distance"] = safe_divide(results["Multiple_runs"]["Avg_Best_cfe_distance"], results["Multiple_runs"]["Times_that_at_least_one_cfe_found_percentage"])
+                results["Multiple_runs"]["Avg_Best_cfe_l2_distance"] = safe_divide(results["Multiple_runs"]["Avg_Best_cfe_l2_distance"], results["Multiple_runs"]["Times_that_at_least_one_cfe_found_percentage"])
+                results["Multiple_runs"]["Avg_Best_cfe_l1_distance"] = safe_divide(results["Multiple_runs"]["Avg_Best_cfe_l1_distance"], results["Multiple_runs"]["Times_that_at_least_one_cfe_found_percentage"])
+                results["Multiple_runs"]["Avg_Best_cfe_weighted_l1_distance"] = safe_divide(results["Multiple_runs"]["Avg_Best_cfe_weighted_l1_distance"], results["Multiple_runs"]["Times_that_at_least_one_cfe_found_percentage"])
+                results["Multiple_runs"]["Avg_Best_cfe_sparsity"] = safe_divide(results["Multiple_runs"]["Avg_Best_cfe_distance"], results["Multiple_runs"]["Times_that_at_least_one_cfe_found_percentage"])
+
+                results["Multiple_runs"]["Avg_Intermediate_best_cfe_distance"] = safe_divide(results["Multiple_runs"]["Avg_Intermediate_best_cfe_distance"], results["Multiple_runs"]["Times_that_at_least_one_intermediate_cfe_found_percentage"])
+                results["Multiple_runs"]["Avg_Intermediate_best_cfe_l2_distance"] = safe_divide(results["Multiple_runs"]["Avg_Intermediate_best_cfe_l2_distance"], results["Multiple_runs"]["Times_that_at_least_one_intermediate_cfe_found_percentage"])
+                results["Multiple_runs"]["Avg_Intermediate_best_cfe_l1_distance"] = safe_divide(results["Multiple_runs"]["Avg_Intermediate_best_cfe_l1_distance"], results["Multiple_runs"]["Times_that_at_least_one_intermediate_cfe_found_percentage"])
+                results["Multiple_runs"]["Avg_Intermediate_best_cfe_weighted_l1_distance"] = safe_divide(results["Multiple_runs"]["Avg_Intermediate_best_cfe_weighted_l1_distance"], results["Multiple_runs"]["Times_that_at_least_one_intermediate_cfe_found_percentage"])
+                results["Multiple_runs"]["Avg_Intermediate_best_cfe_sparsity"] = safe_divide(results["Multiple_runs"]["Avg_Intermediate_best_cfe_sparsity"], results["Multiple_runs"]["Times_that_at_least_one_intermediate_cfe_found_percentage"])
+                
+                results["Multiple_runs"]["Avg_number_of_generations"] /= running_times_per_instance
+                results["Multiple_runs"]["Avg_Time_dynamic"] /= running_times_per_instance
+
+                results["Multiple_runs"]["Avg_distance_between_best_and_intermediate_best_cfes"] = safe_divide(results["Multiple_runs"]["Avg_distance_between_best_and_intermediate_best_cfes"], results["Multiple_runs"]["Times_that_at_least_one_intermediate_cfe_found_percentage"])
 
             results_X[i] = results
             iteration += 1
+        
+        if self.dynamic_constraints:
+            print(f"Empty intermediate counter: {empty_intermediate_counter}")
         return results_X
 
     def distance(self, x_prime):

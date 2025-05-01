@@ -1010,30 +1010,29 @@ class UGCE:
         # print("Initial seed number: ", self.seed_number + self.seed_update_number)
         time_start_not_dynamic = time()
         
-        def generations(population, num_generations, best_fitness):
-            # print("Starting evolution...")
-            # Initialize variables to track improvements
+        def generations(population, num_generations, best_fitness):          
+            elite_count = max(1, int(self.elite_ratio * len(population)))
+            gen = 0
+            previous_best_fitness = best_fitness
+            current_best_fitness = float("-inf")
             generations_without_improvement = 0
-            elite_count = max(1, int(self.elite_ratio * len(population)))  # Calculate the number of elite individuals
 
-            for gen in range(num_generations):
-                # Termination criterion based on lack of improvement
+            # Termination Criteria
+            while gen < num_generations:
+                if abs(current_best_fitness - previous_best_fitness) < self.thresh:
+                    generations_without_improvement += 1
+                else:
+                    generations_without_improvement = 0
+
                 if generations_without_improvement >= self.early_stopping_iterations:
-                    if self.verbose:
-                        print("Stopping early due to lack of fitness improvement.")
                     break
-                if not self.complete_random:
-                    # Re-seed at the start of each generation
-                    self.seed_update_number += gen
-                    self.set_seed(self.seed_number + self.seed_update_number)
+                previous_best_fitness = current_best_fitness
 
-                if self.verbose:
-                    print(f"Generation: {gen}")
+                # Elitism
                 if self.elite_ratio > 0:
-                    # Select the top elite individuals from the current population
                     elite_individuals = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:elite_count]
 
-                # print(f"Generation Seed number: {self.seed_number + self.seed_update_number}")
+                # Parent Selection
                 if self.selection_method == "tournament":
                     parents = self.tournament_selection(population, self.num_parents)
                 elif self.selection_method == "roulette":
@@ -1042,93 +1041,65 @@ class UGCE:
                     parents = self.rank_selection(population, self.num_parents)
                 elif self.selection_method == "sus":
                     parents = self.sus_selection(population, self.num_parents)
+                elif self.selection_method == "50percentbest":
+                    parents = self.fifty_percent_best_selection(population, self.num_parents)
                 
                 offspring = []
                 offspring_size = len(population) - elite_count
 
                 # Create offspring until the required population size is reached
                 while len(offspring) < offspring_size:
-                    if not self.complete_random:
-                        self.seed_update_number += 1
-                        self.set_seed(self.seed_number + self.seed_update_number)
-                    # print(f"Crossover Seed number: {self.seed_number + self.seed_update_number}")
+                    # Select parent pairs for crossover, allowing repetition
+                    # parent1, parent2 = deepcopy(random.choice(parents)), deepcopy(random.choice(parents))
+                    try:
+                        # Try selecting two distinct parents
+                        parent1, parent2 = deepcopy(random.sample(parents, 2))
+                        if np.array_equal(parent1.genes, parent2.genes):
+                            raise ValueError("Identical parents")
+                    except:
+                        # If unable to find distinct parents, fall back to cloning any two and rely on mutation
+                        parent1 = parent2 = deepcopy(random.choice(parents))
 
-                    # Select parent pairs for crossover, allowing repetition of parents
-                    parent1, parent2 = deepcopy(random.choice(parents)), deepcopy(random.choice(parents))
                     if random.random() < self.cxpb:
-                        # Perform crossover
-                        child1, child2 = self.crossover([parent1, parent2])
+                        child1, child2 = self.crossover([parent1, parent2], self.crossover_points)
                         offspring.extend([child1, child2])
                     else:
-                        # If no crossover, directly clone parents
+                        # No crossover, directly clone
                         offspring.extend([parent1, parent2])
 
                 for mutant in offspring:
-                    if not self.complete_random:
-                        self.seed_update_number += 1  
-                        self.set_seed(self.seed_number + self.seed_update_number)
-                        # print(f"Mutation Seed number: {self.seed_number + self.seed_update_number}")
-
                     if random.random() < self.mutpb:
                         self.mutate_individual(mutant)
-                
-                # Evaluate the fitness of the offspring
-                offspring = self.fitness_assignment(offspring)
-                # print(f"    Population size: {len(population)}, offspring size: {len(offspring)}")
 
                 # Ensure only the needed number of offspring are retained
-                if self.elite_ratio > 0:
-                    ## keep the best individuals from the offspring (offspring_size)
-                    offspring = sorted(offspring, key=lambda ind: ind.fitness, reverse=True)[:offspring_size]
-                    
-                    # Combine elite individuals with the new offspring to form the next generation
-                    population = elite_individuals + offspring
-                else:
-                    ## keep the best individuals from the current population and the offspring
-                    population = sorted(population + offspring, key=lambda ind: ind.fitness, reverse=True)[:self.population_size]
+                if self.elite_ratio > 0 and len(offspring) > offspring_size:
+                    # Keep the best individuals from the offspring (offspring_size)
+                    # Then Combine elite individuals with the new offspring to form the next generation
+                    offspring, _ = self.fitness_assignment_population(offspring)
+                    population = elite_individuals + sorted(offspring, key=lambda ind: ind.fitness, reverse=True)[:offspring_size]
 
-                # print(" Final population size: ", len(population))
-                current_best_fitness, avg_fitness = self.max_avg_fitness(population)
-                if self.verbose:
-                    print(f"    Average fitness: {avg_fitness}, max fitness: {current_best_fitness}")
-                # Track improvement
-                if current_best_fitness > best_fitness:
-                    best_fitness = current_best_fitness
-                    generations_without_improvement = 0
-                else:
-                    generations_without_improvement += 1                    
-            # print("Evolution complete.\n")
-            return population
-        
-        regeneration_tries = 0
-        while 1:
-            population = self.initialize_population(self.population_size)
-            if self.verbose:
-                print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
-            
-            population = self.fitness_assignment(population)
-            if self.verbose:
-                print(f"Constraints: {self.constraints}")
-                print(f"Immutable features: {self.immutables}")
+                genes_seen = set()
+                unique_population = []
+                for ind in population:
+                    gene_tuple = tuple(ind.genes)
+                    if gene_tuple not in genes_seen:
+                        genes_seen.add(gene_tuple)
+                        unique_population.append(ind)
+                population = unique_population
+                if len(population) == 1:
+                    # add the same individual to the population again, after mutation
+                    population.append(self.mutate_individual(population[0]))
+                elif len(population) == 0:
+                    print("Empty population")
                 
-            max_fitness, avg_fitness = self.max_avg_fitness(population)
-            if self.verbose:
-                print(f"Initial population average fitness: {avg_fitness}, max fitness: {max_fitness}")
-            best_fitness = float("-inf")
-            population = generations(population, self.num_generations, best_fitness)
-            regeneration_tries += 1
-            best_individuals = self.best_individuals(population, self.diversity_top_k)
-            
-            if self.verbose:
-                print(f"Best cfe is: {best_individuals.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)}")
-
-            if self.original_prediction == f_model(transform_individual(np.array(best_individuals.genes), self.scaler), self.model)\
-            and regeneration_tries < self.regeneration_tries:
-                if self.verbose:
-                    print("No solution found, starting all over again with different initial population.")
-                if not self.complete_random:
-                    self.seed_number += 1
-                continue
+                population, current_best_fitness = self.fitness_assignment_population(population, clear_fitness=True)
+                gen += 1
+                if self.reweighting_lambdas_after_generations >= 0 and gen == self.reweighting_lambdas_after_generations:
+                    self.lambda1 = self.lambdas_reweighting_after_updating_constraints_and_some_generations["lambda1"]
+                    self.lambda2 = self.lambdas_reweighting_after_updating_constraints_and_some_generations["lambda2"]
+                    self.lambda3 = self.lambdas_reweighting_after_updating_constraints_and_some_generations["lambda3"]
+            return population, gen
+        
             else:
                 break
             

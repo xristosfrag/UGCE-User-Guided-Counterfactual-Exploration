@@ -922,26 +922,68 @@ class UGCE:
                 individual.genes[i] = new_value
         return individual
     
-    def fitness_assignment(self, population, clear_fitness=False, verbose=False):
-        """
-        Assign fitness values to the population based on the evaluation function.
-        
-        Args:
-            population (list): The population of individuals to evaluate.
-        """
-        ## deepcopy the population to avoid changing the original population
-        population = deepcopy(population)
-        if not self.complete_random:
-            self.set_seed(self.seed_number)
+    def fitness_assignment_population(self, population, clear_fitness=False):
         if clear_fitness:
-            for ind in population: # recalculate the fitness for the entire population
-                ind.fitness = None
-                ind.fitness = self.evaluate(ind.genes, verbose=verbose)
-        else:
             for ind in population:
-                ind.fitness = ind.fitness if ind.fitness is not None else self.evaluate(ind.genes, verbose=verbose)
-        return population
-            
+                ind.fitness = None
+
+        genes = [ind.genes for ind in population]
+        decoded_genes = decode_label_encoded_data(deepcopy(genes), self.feature_names, self.categorical_columns, self.categorical_label_encoders)
+        if len(decoded_genes) == 0:
+            print(f"Empty decoded genes: {decoded_genes}")
+        ## turn the decoded genes into dataframes for predictions
+        decoded_genes = pd.DataFrame(decoded_genes, columns=self.feature_names)
+        normalized_genes = normalize_data(genes, self.feature_names, self.dataset)
+
+        distances = None
+        if self.distance_metric == "l2":
+            distances = self.normalized_l2_distance(normalized_genes, self.normalized_x_numpy)
+        elif self.distance_metric == "l1":
+            distances = self.normalized_l1_distance(normalized_genes, self.normalized_x_numpy)
+        elif self.distance_metric == "weighted_l1":
+            distances = self.compute_proximity_loss_dice(normalized_genes, self.normalized_x_numpy)
+        else: 
+            raise ValueError("Invalid distance metric. Supported metrics are: l1, l2, weighted_l1")
+
+        sparsities = self.normalized_sparsity(normalized_genes, self.normalized_x_numpy)
+        y_primes = f_model(decoded_genes, self.model)
+
+        y_scores = None
+        if self.normalized_fitness:
+            y_scores = np.where(y_primes == self.original_prediction, -1, 1)
+        else:
+            y_scores = np.where(y_primes == self.original_prediction, 0, 100)
+
+        fitness_scores = -self.lambda1 * distances - self.lambda2 * sparsities + self.lambda3 * y_scores
+
+        for ind, fitness in zip(population, fitness_scores):
+            ind.fitness = fitness
+        return population, max(fitness_scores)
+    
+    def get_closest_positive_instances_optimized(self, population_size=100):
+        """
+        Find the closest positive instances to a given negative instance.
+        """
+        population_around_instance_time = time()
+        # Query for nearest neighbors of the first negative instance
+        distances, indices = self.kdTree.query(self.x_label_encoded, k=len(self.kdTree_dataset))
+
+        # Exclude the first neighbor (self)
+        distances, indices = distances[:, 1:], indices[:, 1:]
+        neighbors = zip(indices[0], distances[0])
+
+        # Filter neighbors for positives and use a heap to keep the closest `num_positives`
+        closest_positives = heapq.nsmallest(
+            population_size,
+            ((idx, dist) for idx, dist in neighbors if idx in self.positive_indices),
+            key=lambda x: x[1]
+        )
+
+        # Get indices of the closest positive neighbors
+        closest_positive_indices = [idx for idx, _ in closest_positives]
+        closest_positive_instances = self.dataset.loc[closest_positive_indices]
+        return [Individual(genes=row.tolist()) for _, row in closest_positive_instances.iterrows()], population_around_instance_time
+
     def initialize_population(self, population_size=100):
         population = []
         unique_individuals = set()

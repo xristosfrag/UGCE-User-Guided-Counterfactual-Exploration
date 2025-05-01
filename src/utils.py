@@ -52,32 +52,164 @@ def compute_distances_in_blocks(data, block_size=1000, representation=16):
                 results[j:j_end, i:i_end] = results[i:i_end, j:j_end].T  # Symmetric assignment
     return results
 
+# ========================================================================================================================
+# ========================================================================================================================
+# ========================================================================================================================
+def normalize_data(data, feature_names, full_data):
+    """Normalizes features based on min-max values from a reference dataset.
+    
+    Parameters:
+    - data: The dataset to be normalized (can be list, NumPy array, or DataFrame).
+    - feature_names: The names of the features to be normalized.
+    - full_data: The reference dataset used to compute min-max values.
+    
+    Returns:
+    - The normalized dataset as a pandas DataFrame (if input was DataFrame),
+      or a NumPy array (if input was list or NumPy array).
+    """
+    if isinstance(data, list):
+        data = np.array(data, dtype=float)
+
+    min_values = full_data[feature_names].min()
+    max_values = full_data[feature_names].max()
+
+    if isinstance(data, pd.DataFrame):
+        normalized_data = data.copy()
+        for feature in feature_names:
+            if min_values[feature] == max_values[feature]:
+                normalized_data[feature] = 0
+            else:
+                normalized_data[feature] = (data[feature] - min_values[feature]) / (max_values[feature] - min_values[feature])
+        return normalized_data
+    elif isinstance(data, np.ndarray):
+        normalized_data = data.astype(float)
+        
+        for i, feature in enumerate(feature_names):
+            min_value = min_values[feature]
+            max_value = max_values[feature]
+            if min_value == max_value:
+                normalized_data[:, i] = 0
+            else:
+                normalized_data[:, i] = (data[:, i] - min_value) / (max_value - min_value)
+        return normalized_data
+    else:
+        raise ValueError("Unsupported input type. Expected pandas DataFrame, NumPy array, or list.")
+
+def initial_label_encode_data(df, feature_names, categorical):
+    """
+    Label encodes categorical features in a DataFrame.
+
+    Parameters:
+    - df: The input DataFrame.
+    - feature_names: List of feature names of the dataframe.
+    - categorical: List of categorical feature names to be encoded.
+
+    Returns:
+    - A new DataFrame with label-encoded categorical features.
+    - A dictionary of LabelEncoders used for each feature.
+    """
+    encoded_df = df.copy()
+    label_encoders = {}
+
+    for feature in feature_names:
+        if feature in categorical:
+            label_encoders[feature] = LabelEncoder()
+            label_encoders[feature].fit(df[feature])
+            
+            encoded_df[feature] = label_encoders[feature].transform(df[feature])
+    return encoded_df, label_encoders
+
+def label_encode_data(df, feature_names, categorical, label_encoders):
+    """
+    Label encodes categorical features in a DataFrame using existing LabelEncoders.
+    
+    Parameters:
+    - df: The input DataFrame.
+    - feature_names: List of feature names of the dataframe.
+    - categorical: List of categorical feature names to be encoded.
+    - label_encoders: Dictionary of LabelEncoders used for each feature.
+    
+    Returns:
+    - A new DataFrame with label-encoded categorical features."""
+    is_series = isinstance(df, pd.Series)
+    encoded_df = df.to_frame().T.copy() if is_series else df.copy()
+
+    for feature in feature_names:
+        if feature in categorical:
+            encoded_df[feature] = label_encoders[feature].transform(df[feature])
+    return encoded_df
+
+def decode_label_encoded_data(data, feature_names, categorical_columns, label_encoders):
+    """Decodes label-encoded categorical features for pandas DataFrames, NumPy arrays, and lists.
+    
+    Parameters:
+    - data: The input data (can be list, NumPy array, or DataFrame).
+    - feature_names: List of feature names of the dataframe.
+    - categorical_columns: List of categorical feature names to be decoded.
+    - label_encoders: Dictionary of LabelEncoders used for each feature.
+    
+    Returns:
+    - A new DataFrame or NumPy array with decoded categorical features.
+    """
+    if isinstance(data, list):
+        data = np.array(data)
+
+    if isinstance(data, pd.DataFrame):
+        decoded_data = data.copy()
+        for feature in categorical_columns:
+            if feature in feature_names:
+                decoded_data[feature] = label_encoders[feature].inverse_transform(data[feature].astype(int))
+        return decoded_data
+    
+    elif isinstance(data, np.ndarray):
+        decoded_data = data.copy()
+        decoded_dict = {}
+        
+        for i, feature in enumerate(feature_names):
+            if feature in categorical_columns:
+                decoded_dict[feature] = label_encoders[feature].inverse_transform(data[:, i].astype(int))
+            else:
+                decoded_dict[feature] = data[:, i]
+        
+        decoded_data = np.column_stack([decoded_dict[feature] for feature in feature_names])
+        return decoded_data
+    
+    else:
+        raise ValueError("Unsupported input type. Expected list, pandas DataFrame, or NumPy array.")
+
+def required_attributes(dataset):
+    '''
+    Returns the required attributes, such as the MinMaxScaler for each column, the feature ranges, and the feature types.
+    '''
+    min_max_scaler_per_column = {}
+    features_ranges = {}
+    feature_types = {}
+    for col in dataset.columns:
+        min_max_scaler_per_column[col] = MinMaxScaler().fit(dataset[col].values.reshape(-1, 1))
+        minimum = min_max_scaler_per_column[col].data_min_[0]
+        maximum = min_max_scaler_per_column[col].data_max_[0]
+        features_ranges[col] = (minimum, maximum)
+        if pd.api.types.is_integer_dtype(dataset[col]):
+            feature_types[col] = 'int'
+        elif pd.api.types.is_float_dtype(dataset[col]):
+            feature_types[col] = 'float'
+    
+    return min_max_scaler_per_column, features_ranges, feature_types
+############################################################################################################################
+############################################################################################################################
+############################################################################################################################
+def safe_divide(numerator, denominator):
+    return numerator / denominator if denominator > 0 else None
+
 def transform_individual(individual, scaler):
     return scaler.transform(individual.reshape(1, -1))
 
-# Inverse transform a scaled individual back to the original space
 def inverse_transform_individual(scaled_individual, scaler, feature_columns):
     if len(scaled_individual) != len(feature_columns):
         raise ValueError(f"Expected feature length: {len(feature_columns)}, got: {len(scaled_individual)}. Please check your feature selection pipeline.")
     original_individual = scaler.inverse_transform(scaled_individual.reshape(1, -1))
     return original_individual[0], pd.DataFrame(original_individual, columns=feature_columns).iloc[0].to_dict()
 
-# Scale user-provided constraints from original space to scaled space
-def scale_constraints(original_constraints, scaler, feature_columns):
-    # Create a dummy dataframe with the constraints
-    constraint_df = pd.DataFrame([original_constraints], columns=feature_columns)
-    # Scale the constraints using the same scaler
-    scaled_constraints = scaler.transform(constraint_df)
-    return {i: (scaled_constraints[0][i], scaled_constraints[0][i]) for i in range(len(feature_columns))}
-
-# Train a binary classification model on the COMPAS dataset
-def train_test_split_model(features, target):
-    X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
-    model = LogisticRegression(random_state=42)
-    model.fit(X_train, y_train)
-    return model, X_train, X_test, y_train, y_test
-
-# User-defined model function to wrap the logistic regression model
 def f_model(instance, model):
     return model.predict(instance.reshape(1, -1))[0]
 

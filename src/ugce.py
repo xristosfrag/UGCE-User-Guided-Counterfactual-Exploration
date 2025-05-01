@@ -857,116 +857,69 @@ class UGCE:
         
     def crossover(self, parents, crossover_points=1):
         num_parents = len(parents)
-        num_features = len(self.feature_columns)
+        num_features = len(self.feature_names)
         crossover_points = sorted(random.sample(range(1, num_features), crossover_points))
 
-        # Initialize two offspring individuals
-        offspring1 = np.zeros(num_features)
-        offspring2 = np.zeros(num_features)
+        offspring1 = np.zeros(num_features, dtype=np.float64)
+        offspring2 = np.zeros(num_features, dtype=np.float64)
 
-        skip_indices = set()
         current_parent_idx = random.randint(0, num_parents - 1)
         start_idx = 0
-
         for point in crossover_points:
             for i in range(start_idx, point):
-                feature_name = self.feature_columns[i]
-                if feature_name in self.one_hot_encode_features:
-                    if i in skip_indices:
-                        continue
-                    one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
-                    chosen_feature1 = next(idx for idx in one_hot_group if parents[current_parent_idx].genes[list(self.feature_columns).index(idx)] == 1)
-                    chosen_feature2 = next(idx for idx in one_hot_group if parents[(current_parent_idx + 1) % num_parents].genes[list(self.feature_columns).index(idx)] == 1)
-
-                    for one_hot_feature in one_hot_group:
-                        index = list(self.feature_columns).index(one_hot_feature)
-                        offspring1[index] = 1 if one_hot_feature == chosen_feature1 else 0
-                        offspring2[index] = 1 if one_hot_feature == chosen_feature2 else 0
-                    skip_indices.update([list(self.feature_columns).index(f) for f in one_hot_group])
-                else:
-                    offspring1[i] = parents[current_parent_idx].genes[i]
-                    offspring2[i] = parents[(current_parent_idx + 1) % num_parents].genes[i]
+                offspring1[i] = parents[current_parent_idx].genes[i]
+                offspring2[i] = parents[(current_parent_idx + 1) % num_parents].genes[i]
             current_parent_idx = (current_parent_idx + 1) % num_parents
             start_idx = point
 
         for i in range(start_idx, num_features):
-            feature_name = self.feature_columns[i]
-            if feature_name in self.one_hot_encode_features:
-                if i in skip_indices:
-                    continue
-                one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
-                chosen_feature1 = next(idx for idx in one_hot_group if parents[current_parent_idx].genes[list(self.feature_columns).index(idx)] == 1)
-                chosen_feature2 = next(idx for idx in one_hot_group if parents[(current_parent_idx + 1) % num_parents].genes[list(self.feature_columns).index(idx)] == 1)
-
-                for one_hot_feature in one_hot_group:
-                    index = list(self.feature_columns).index(one_hot_feature)
-                    offspring1[index] = 1 if one_hot_feature == chosen_feature1 else 0
-                    offspring2[index] = 1 if one_hot_feature == chosen_feature2 else 0
-                skip_indices.update([list(self.feature_columns).index(f) for f in one_hot_group])
-            else:
-                offspring1[i] = parents[current_parent_idx].genes[i]
-                offspring2[i] = parents[(current_parent_idx + 1) % num_parents].genes[i]
+            offspring1[i] = parents[current_parent_idx].genes[i]
+            offspring2[i] = parents[(current_parent_idx + 1) % num_parents].genes[i]
 
         return Individual(offspring1), Individual(offspring2)
 
     def mutate_individual(self, individual):
-        skip_mutation_indexes = []
-        for i in range(len(self.feature_columns)):
+        skip_mutation_indexes = set()
+
+        for i in range(len(self.feature_names)):
             if i in skip_mutation_indexes:
                 continue
-            if not self.complete_random:
-                self.seed_update_number += 1
-                self.set_seed(self.seed_number + self.seed_update_number)
-                # print(f"Mutation per attribute Seed number: {self.seed_number + self.seed_update_number}")
+
             if random.random() < self.mutpb:
-                feature_name = self.feature_columns[i]
+                feature_name = self.feature_names[i]
+
+                # Handle immutables
                 if i in self.immutables:
-                    if feature_name in self.one_hot_encode_features:
-                        one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
-                        skip_mutation_indexes += [list(self.feature_columns).index(f) for f in one_hot_group]
-                        for index in skip_mutation_indexes:
-                            individual.genes[index] = self.inverse_transformed_x_indexes[index]
-                    elif self.inverse_transformed_x_indexes[i] == individual.genes[i]:
-                        continue
-                    else:
-                        individual.genes[i] = self.inverse_transformed_x_indexes[i]
-                        continue
-                elif feature_name in self.categorical_columns:
-                    possible_values = self.features_ranges[feature_name]
-                    original_value = individual.genes[i]
-                    new_value = original_value
-                    while new_value == original_value:
+                    if self.x_label_encoded_numpy[i] != individual.genes[i]:
+                        individual.genes[i] = self.x_label_encoded_numpy[i]
+                    continue
+
+                original_value = individual.genes[i]
+                lower, upper = self.constraints.get(i, self.features_ranges[feature_name])
+
+                # Validate against data distribution if needed
+                if self.data_distribution:
+                    lower_data_distribution, upper_data_distribution = self.features_ranges[feature_name]
+                    if lower < lower_data_distribution or upper > upper_data_distribution:
+                        print(f"Constraint for {feature_name} [{lower}, {upper}] violates data distribution [{lower_data_distribution}, {upper_data_distribution}]")
+                        sys.exit()
+
+                new_value = original_value
+
+                if self.features_type[feature_name] == 'int':
+                    possible_values = list(set(range(int(np.ceil(lower)), int(np.floor(upper)) + 1)) - {int(original_value)})
+                    if possible_values:
                         new_value = random.choice(possible_values)
-                    individual.genes[i] = new_value
-                    
-                elif feature_name in self.one_hot_encode_features:
-                    one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
-                    current_index = next(idx for idx in one_hot_group if individual.genes[list(self.feature_columns).index(idx)] == 1)
-                    chosen_feature = current_index
-                    while chosen_feature == current_index:
-                        chosen_feature = random.choice(one_hot_group)
-                    for one_hot_feature in one_hot_group:
-                        index = list(self.feature_columns).index(one_hot_feature)
-                        individual.genes[index] = 1 if one_hot_feature == chosen_feature else 0
                 else:
-                    original_value = individual.genes[i]
-                    new_value = original_value
-                    if self.constraints.get(i):
-                        lower, upper = self.constraints[i]
-                        if self.data_distribution:
-                            lower_data_distribution, upper_data_distribution = self.features_ranges[feature_name]
-                            if lower < lower_data_distribution or upper > upper_data_distribution:
-                                print(f"Constraints for {feature_name} violate the data distribution: [{lower}, {upper}] vs [{lower_data_distribution}, {upper_data_distribution}]")
-                                sys.exit()
+                    if lower == upper:
+                        new_value = lower
                     else:
-                        lower, upper = self.features_ranges[feature_name]
-                    if self.features_type[feature_name] == 'int':
-                        while new_value == original_value:
-                            new_value = random.randint(lower, upper)
-                    else:
-                        while new_value == original_value:
-                            new_value = random.uniform(lower, upper)
-                    individual.genes[i] = new_value
+                        while True:
+                            candidate = random.uniform(lower, upper)
+                            if candidate != original_value:
+                                new_value = candidate
+                                break
+                individual.genes[i] = new_value
         return individual
     
     def fitness_assignment(self, population, clear_fitness=False, verbose=False):

@@ -1005,10 +1005,16 @@ class UGCE:
         else:
             sys.exit(f"Invalid initial population strategy: {self.initial_population_strategy}.")
 
+    def check_null_updated_constraints(self):
+        for key, value in self.updated_constraints.items():
+            if value != "":
+                return False
+        return True
 
     def evolve(self):
-        # print("Initial seed number: ", self.seed_number + self.seed_update_number)
-        time_start_not_dynamic = time()
+        time_intermediate_from_scratch = 0
+        generations_from_scratch = 0
+        population_generation_time = None
         
         def generations(population, num_generations, best_fitness):          
             elite_count = max(1, int(self.elite_ratio * len(population)))
@@ -1100,136 +1106,181 @@ class UGCE:
                     self.lambda3 = self.lambdas_reweighting_after_updating_constraints_and_some_generations["lambda3"]
             return population, gen
         
-            else:
+        regeneration_tries_intermediate = -1
+        population = []
+        unique_applicable_cfes_from_scratch = []
+        unique_applicable_cfes_to_unique_individuals_percentage_from_scratch = 0
+        solution = []
+
+        while regeneration_tries_intermediate <= self.regeneration_tries_intermediate:
+            population, population_generation_time, population_around_instance_time = self.initialize_population(self.population_size)
+            population_generation_time += population_generation_time
+            time_intermediate_from_scratch += population_around_instance_time
+
+            genetic_algorithm_time = time()
+            population, best_fitness = self.fitness_assignment_population(population)
+            population, generations_from_scratch = generations(population, self.num_generations, best_fitness)
+            
+            unique_applicable_cfes_from_scratch, unique_applicable_cfes_to_unique_individuals_percentage_from_scratch =\
+                self.changed_prediction_individuals(population)
+
+            time_intermediate_from_scratch += time() - genetic_algorithm_time
+            if len(unique_applicable_cfes_from_scratch) > 0:
+                solution = unique_applicable_cfes_from_scratch[0]
                 break
-            
-        unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
-        elapsed_time_not_dynamic = time() - time_start_not_dynamic
-        
+            else:
+                regeneration_tries_intermediate += 1
         if self.verbose:
-            print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
-            print(f"    Diversity: {100 - self.identical_individuals_percentage(population):.2f}% unique individuals")
-            print(f"    Elapsed time: {elapsed_time_not_dynamic:.2f} seconds")
-            cfe_with_feature_names = dict(zip(self.feature_columns, best_individuals.genes))  # Transform the best individual list to a dictionary format
-            display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
-            print()
-    
-        # If dynamic constraints are enabled, ask the user for acceptance and update constraints
+            if len(solution) == 0:
+                best_individual = max(population, key=lambda ind: ind.fitness)
+                print(f"No solution found. Best individual: {best_individual.genes})")
+            else:
+                pass
+                # cfe_reshaped = solution.reshape(1, -1)
+                # inverse_transformed_cfe_reshaped_df = inverse_transform_dataset_with_onehot(cfe_reshaped, self.model, self.numerical_columns, self.binary_categorical_columns, self.feature_names[self.numerical_and_binary_categorical_len:]).iloc[0]
+                # inverse_transformed_cfe_reshaped_features = inverse_transformed_cfe_reshaped_df.to_dict()
+                # display_cfe_comparison(self.x_dict, inverse_transformed_cfe_reshaped_features)
+
+        # If dynamic constraints are enabled:
+        #   ask the user for acceptance
+        #   and update constraints
+        self.population = population
+        generations_dynamic = 0
         if self.dynamic_constraints:
-            if self.verbose:
-                print("Dynamic constraints enabled.")
-            best_individual = self.best_individuals(population, 0)
-            # Update constraints based on user input
-            self.get_updated_constraints()
-            accepted = self.ask_user_acceptance(best_individual=best_individual)
-            elapsed_time = 0
-            regeneration_acceptance_tries = 0
-            
-            while not accepted:
-                if regeneration_acceptance_tries > 0:
-                    # Update constraints based on user input
-                    self.get_updated_constraints()
-
-                start_time = time()
-                regeneration_tries = 0
+            # if dynamic, but not updated constraints.
+            if self.check_null_updated_constraints() and self.automatic_user_acceptance:
+                return unique_applicable_cfes_from_scratch, unique_applicable_cfes_from_scratch, 0, time_intermediate_from_scratch, 0, 0, unique_applicable_cfes_to_unique_individuals_percentage_from_scratch
                 
-                while 1:
-                    if not self.complete_random:
-                        self.seed_number += 1
-                        print("SEED NUMBER:  ",self.seed_number)
-                    unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
-                    
-                    if self.verbose:
-                        print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
-                    # Update the fitness values based on the new constraints
-                    population = self.fitness_assignment(population, clear_fitness=True)
-                    
-                    max_fitness = max(population, key=lambda ind: ind.fitness).fitness
-                    if self.verbose:
-                        print(f"    !! Best fitness using the new constraints: {max_fitness}")
-                    
+            unique_applicable_cfes = []
+            time_dynamic = 0
+            unique_applicable_cfes_to_unique_individuals_percentage = 0
+            if not self.multistep_updated_constraints:
+                self.get_updated_constraints(values=None)
+
+                if solution == []:
+                    accepted = 'n'
+                else:
+                    accepted = self.ask_user_acceptance(best_individual=solution)
+                solution = []
+
+                regeneration_tries_intermediate_after_updating_constraints = -1
+                
+                while accepted != 'y' and regeneration_tries_intermediate_after_updating_constraints\
+                                    <= self.regeneration_tries_intermediate_after_updating_constraints:
+                    start_time_intermediate_dynamic = time()
+                    best_fitness = float("-inf")
+                    ##### NEW RANDOM POPULATION #####
+                    if self.strategy=="new_random_population":
+                        population, _, _ = self.initialize_population(population_size=self.population_size, initial_population_strategy="random")
+                        population, best_fitness = self.fitness_assignment_population(population, clear_fitness=True)
+                    ##### UPDATE FITNESS #####
+                    elif self.strategy == "update_fitness":
+                        population, best_fitness = self.fitness_assignment_population(population, clear_fitness=True)
                     ##### FIXING THE POPULATION #####
-                    if self.fix_population:
-                        population = self.update_population(population)
-                        self.fitness_assignment(population, clear_fitness=True)
-                       
-                    ##### ADD INDIVIDUALS THAT ADHERE TO THE NEW CONSTRAINTS TO THE POPULATION #####  
-                    if self.population_size_dynamic > 0:
-                        ## Just create |self.population_size_dynamic| individuals that adheres to the new constraints
-                        new_population = self.initialize_population(population_size=self.population_size_dynamic)
-
-                        ## get the fitness of the new individual
-                        self.fitness_assignment(new_population)
-
-                        ## now add this individual to the population 
-                        population.extend(new_population)
-                                        
-                        # Update the fitness values based on the new constraints
-                        population = self.fitness_assignment(population, clear_fitness=True)
-
-                        # and remove the worst individual cause we just added a new one
-                        population = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:-self.population_size_dynamic]
-
-                    if self.verbose:
-                        print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
+                    elif self.strategy == "fix_population_update_fitness":
+                        population = self.update_violators(population)
+                        population, best_fitness = self.fitness_assignment_population(population, clear_fitness=True)
+                    else:
+                        raise ValueError("Invalid strategy. Supported strategies are: new_random_population, update_fitness, fix_population_update_fitness")
+                    ##### ADD INDIVIDUALS THAT ADHERE TO THE NEW CONSTRAINTS TO THE POPULATION #####
+                    if self.strategy == "Add_individuals_with_respected_constraints_n_keep_the_best":
+                        if self.population_size_dynamic > 0:
+                            new_population = self.initialize_population(population_size=self.population_size_dynamic)
+                            population.extend(new_population)
+                            population, best_fitness = self.fitness_assignment_population(population, clear_fitness=True)
+                            population = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:-self.population_size_dynamic]
+                        else:
+                            print("The population size dynamic should be greater than 0 for this strategy.")
+                            sys.exit()
 
                     ### APPLY GENERATIONS TO THE CURRENT POPULATION AFTER PROVIDING THE CURRENT MAX FITNESS VALUE ###
-                    max_fitness = max(population, key=lambda ind: ind.fitness).fitness
-                    if self.verbose:
-                        print(f"    !! Best fitness before starting the new generations to the population: {max_fitness}")
-                    population = generations(population, 30, max_fitness)                    
-                            
-                    ## Print once again the general statistics of the population
-                    unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
-                    if self.verbose:
-                        print(f"    Identical Individuals: {identical_individuals_percentage:.2f}%, Unique applicable CFEs: {unique_applicable_cfes_len}, CFE Diversity: {(100 - unique_applicable_cfes_to_unique_individuals_percentage) if unique_applicable_cfes_to_unique_individuals_percentage > 0 else 0:.2f}%")
-                        best_individual_from_whole_population = self.best_individuals(population, 0)
-                        print(f"    Best individual from the whole population is: {best_individual_from_whole_population.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual_from_whole_population.genes), self.scaler), self.model)}")
+                    population, generations_dynamic = generations(population, self.num_generations, best_fitness)
+                    unique_applicable_cfes, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(population)
+                    time_dynamic += (time() - start_time_intermediate_dynamic)
 
-                    ## Compute the elapsed time
-                    elapsed_time += (time() - start_time)
-                    regeneration_acceptance_tries += 1
-                    if self.verbose:
-                        print(f"Time taken for dynamic constraint placement: {elapsed_time:.2f} seconds")
+                    if len(unique_applicable_cfes) > 0:
+                        solution = unique_applicable_cfes[0]
+                        accepted = self.ask_user_acceptance(best_individual=solution)
+                    regeneration_tries_intermediate_after_updating_constraints += 1
 
-                    ## Not unique applicable cfes found, and the regeneration tries are less than the maximum allowed
-                    if len(unique_applicable_cfes) == 0:            
-                        if regeneration_tries < self.regeneration_tries:
-                            if self.verbose:
-                                print("No solution found, starting all over again with different initial population.\n\n")
-                            if not self.complete_random:
-                                self.seed_number += 1
-                                self.set_seed(self.seed_number)
-                            regeneration_tries += 1
-                            continue
-                        else: ## No solution found, and the regeneration tries are equal to the maximum allowed
-                            if self.verbose:
-                                print("No solution found, stopping early. Maximum regeneration tries reached.")
-                                best_individual_from_whole_population = self.best_individuals(population, 0)
-                                print(f"    Best individual from the whole population is: {best_individual_from_whole_population.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_individual_from_whole_population.genes), self.scaler), self.model)}")
-                            break
-                    ## Unique applicable cfes found
+                if self.verbose:
+                    if len(unique_applicable_cfes) < 0:
+                        best_individual = max(population, key=lambda ind: ind.fitness)
+                        print(f"No solution found. Best individual: {best_individual.genes})")
                     else:
-                        best_applicable_cfe = self.best_individuals(unique_applicable_cfes, 0)
-                        if self.verbose:
-                            print(f"    Best applicable CFE: {best_applicable_cfe.genes}, guaranteed to alter the decision of the model from {self.original_prediction} to: {f_model(transform_individual(np.array(best_applicable_cfe.genes), self.scaler), self.model)}")
+                        pass
+                        # get the best cfe:
+                        # cfe = unique_applicable_cfes[0]
+                        # # inverse_transformed_cfe_reshaped_df = inverse_transform_dataset_with_onehot(cfe_reshaped, self.model, self.numerical_columns, self.binary_categorical_columns, self.feature_names[self.numerical_and_binary_categorical_len:]).iloc[0]
+                        # inverse_transformed_cfe_reshaped_features = inverse_transformed_cfe_reshaped_df.to_dict()
+                        # display_cfe_comparison(self.x_dict, inverse_transformed_cfe_reshaped_features)
 
-                        cfe_with_feature_names = dict(zip(self.feature_columns, best_applicable_cfe.genes))  # Transform the best individual list to a dictionary format
-                        if self.verbose:
-                            display_cfe_comparison(self.inverse_transformed_x_features, cfe_with_feature_names)
-                            print()
-                        accepted = self.ask_user_acceptance(best_individual=best_applicable_cfe)
-                        break
-                if self.automatic_user_acceptance and regeneration_acceptance_tries > 1:
-                    break
-                
-            return unique_applicable_cfes, elapsed_time, unique_applicable_cfes_to_unique_individuals_percentage
+                self.population = population
+            else:
+                for key, values in self.updated_constraints.items():
+                    self.get_updated_constraints(values=values)
+                    # In case of solution is found and automatic assesment is enabled, to continue adding constraints:
+                    #       the user hypothetically does not accept the solution
+                    if self.automatic_user_acceptance:
+                        accepted = 'n'
+                    else:
+                        if solution == []:
+                            accepted = 'n'
+                        else:
+                            accepted = self.ask_user_acceptance(best_individual=solution)
+                    regeneration_tries_intermediate_after_updating_constraints = -1
+                    
+                    while accepted != 'y' and regeneration_tries_intermediate_after_updating_constraints\
+                                        != self.regeneration_tries_intermediate_after_updating_constraints:
+                        start_time_intermediate_dynamic = time()
+                        best_fitness = float("-inf")
+                        ##### NEW RANDOM POPULATION #####
+                        if self.strategy == "new_random_population":
+                            population, _, _ = self.initialize_population(population_size=self.population_size, initial_population_strategy="random")
+                            population, best_fitness = self.fitness_assignment_population(population, clear_fitness=True)
+                        ##### FIXING THE POPULATION #####
+                        elif self.strategy == "fix_population_update_fitness":
+                            population = self.update_violators(population)
+                            population, best_fitness = self.fitness_assignment_population(population, clear_fitness=True)
+                        ##### ADD INDIVIDUALS THAT ADHERE TO THE NEW CONSTRAINTS TO THE POPULATION #####
+                        if self.strategy == "Add_individuals_with_respected_constraints_n_keep_the_best":
+                            if self.population_size_dynamic > 0:
+                                new_population = self.initialize_population(population_size=self.population_size_dynamic)
+                                population.extend(new_population)
+                                population, best_fitness = self.fitness_assignment_population(population, clear_fitness=True)
+                                population = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:-self.population_size_dynamic]
+                            else:
+                                print("The population size dynamic should be greater than 0 for this strategy.")
+                                sys.exit()
+
+                        ### APPLY GENERATIONS TO THE CURRENT POPULATION AFTER PROVIDING THE CURRENT MAX FITNESS VALUE ###
+                        self.population, generations_dynamic_ = generations(self.population, self.num_generations, best_fitness)
+                        generations_dynamic += generations_dynamic_
+                        unique_applicable_cfes, unique_applicable_cfes_to_unique_individuals_percentage = self.changed_prediction_individuals(self.population)
+                        time_dynamic += (time() - start_time_intermediate_dynamic)
+                        if len(unique_applicable_cfes) > 0:
+                            solution = unique_applicable_cfes[0]
+                            accepted = self.ask_user_acceptance(best_individual=solution)
+                        regeneration_tries_intermediate_after_updating_constraints += 1
+                    if self.verbose:
+                        if len(unique_applicable_cfes) < 0:
+                            best_individual = max(population, key=lambda ind: ind.fitness)
+                            print(f"No solution found. Best individual: {best_individual.genes})")
+                        else:
+                            pass
+                            # get the best cfe:
+                            # cfe = unique_applicable_cfes[0]
+                            # # inverse_transformed_cfe_reshaped_df = inverse_transform_dataset_with_onehot(cfe_reshaped, self.model, self.numerical_columns, self.binary_categorical_columns, self.feature_names[self.numerical_and_binary_categorical_len:]).iloc[0]
+                            # inverse_transformed_cfe_reshaped_features = inverse_transformed_cfe_reshaped_df.to_dict()
+                            # display_cfe_comparison(self.x_dict, inverse_transformed_cfe_reshaped_features)
+
+                    # self.population = population
+            return unique_applicable_cfes_from_scratch, unique_applicable_cfes, population_generation_time, time_intermediate_from_scratch, time_dynamic, generations_dynamic, unique_applicable_cfes_to_unique_individuals_percentage
         else:
             self.population = population
-            return unique_applicable_cfes, elapsed_time_not_dynamic, unique_applicable_cfes_to_unique_individuals_percentage
-        
-    def update_population(self, population):
-        ## deepcopy the population
+            return None, unique_applicable_cfes_from_scratch, population_generation_time, time_intermediate_from_scratch,\
+                  None, generations_from_scratch, unique_applicable_cfes_to_unique_individuals_percentage_from_scratch
+    
         population = deepcopy(population)
         for ind in population:
             skip_indices = []

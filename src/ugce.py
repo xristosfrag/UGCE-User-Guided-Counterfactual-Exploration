@@ -787,7 +787,6 @@ class UGCE:
 
                     ranges_score -= 1000 * abs(x_prime_scaled_value - lower_scaled_bound) if x_prime_scaled_value < lower_scaled_bound else abs(x_prime_scaled_value - upper_scaled_bound)
 
-        # Return both the penalty and the reward
         return immutable_score, ranges_score
        
     def generate_individual(self):
@@ -796,68 +795,56 @@ class UGCE:
         :return: An individual
         """        
         genes = []
-        skip_indices = set()  # To keep track of one-hot encoded features to skip
-
-        for i in range(len(self.x)):
+        for i in range(len(self.x_label_encoded_numpy)):
             skip_feature_change_prob = random.random()
+            feature_name = self.feature_names[i]
 
-            if i in skip_indices:
+            # Randomly decide whether to change this feature or not
+            if skip_feature_change_prob > self.initial_population_variability:
+                genes.append(self.x_label_encoded_numpy[i])
                 continue
-            feature_name = self.feature_columns[i]
             
             # If the feature is immutable, keep its original value
             if i in self.immutables:
-                genes.append(self.inverse_transformed_x_features[feature_name])
-                continue
-            
-            # For categorical features, randomly select one of the known unique values
+                genes.append(self.x_label_encoded_numpy[i])
+                continue                
+
+            # For the categorical features, randomly select one of the values
             elif feature_name in self.categorical_columns:
-                if self.data_distribution:
-                    possible_values = self.features_ranges[feature_name]
+                if self.constraints.get(i):
+                    possible_values = self.constraints[i].split()
+                    possible_values = [possible_values[i] for i in range(len(possible_values))]
                     genes.append(random.choice(possible_values))
                 else:
-                    # If the data distribution is not known, generate a random integer
-                    genes.append(random.randint(0, len(self.features_ranges[feature_name]) - 1))
-                
-
-            # For one-hot encoded features, randomly select one of the features in the group to set to 1
-            elif feature_name in self.one_hot_encode_features:
-                one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
-                ## if skip the feature change then keep the original values for the entire group
-                if skip_feature_change_prob > self.initial_population_variability:
-                    # Keep original values for the entire group
-                    genes.extend([self.inverse_transformed_x_features[f] for f in one_hot_group])
-                    skip_indices.update([list(self.feature_columns).index(f) for f in one_hot_group])
-                    continue
-                
-                chosen_feature = random.choice(one_hot_group)
-                # Set the chosen feature to 1 and all others in the group to 0
-                for one_hot_feature in one_hot_group:
-                    if one_hot_feature == chosen_feature:
-                        genes.append(1)
-                    else:
-                        genes.append(0)
-
-                # Skip further iterations for the one-hot encoded features in this group
-                skip_indices.update([list(self.feature_columns).index(f) for f in one_hot_group])
+                    genes.append(random.choice(self.features_ranges[feature_name]))
             
             # For numerical features, generate values within the defined constraints (if provided) or range
             else:
-                # Randomly decide whether to change this feature or not
-                if skip_feature_change_prob > self.initial_population_variability:
-                    genes.append(self.inverse_transformed_x_features[feature_name])
-                    continue
-                
-                if self.constraints.get(i):  # Check if specific constraints are provided
-                    lower, upper = self.constraints[i]
+                if self.constraints.get(i):
+                    if isinstance(self.constraints[i], str):
+                        if self.constraints[i] == "inc":
+                            upper_bound = self.features_ranges[feature_name][1]
+                            if self.features_type[feature_name] == 'int':
+                                genes.append(random.randint(self.x_label_encoded_numpy[i], upper_bound))
+                            else:
+                                genes.append(random.uniform(self.x_label_encoded_numpy[i], upper_bound))
+                        elif self.constraints[i] == "dec":
+                            lower_bound = self.features_ranges[feature_name][0]
+                            if self.features_type[feature_name] == 'int':
+                                genes.append(random.randint(lower_bound, self.x_label_encoded_numpy[i]))
+                            else:
+                                genes.append(random.uniform(lower_bound, self.x_label_encoded_numpy[i]))
+                    else:
+                        value = self.constraints[i].split()
+                        lower, upper = int(value[0]), int(value[1])
 
-                    ## check if the constrains violate the data distribution of the feature
-                    if self.data_distribution:
-                        lower_data_distribution, upper_data_distribution = self.features_ranges[feature_name]
+                        ## check if the constrains violate the data distribution of the feature
+                        if self.data_distribution:
+                            lower_data_distribution, upper_data_distribution = self.features_ranges[feature_name]
 
-                        if lower < lower_data_distribution or upper > upper_data_distribution:
-                            print(f"Constraints for {feature_name} violate the data distribution: [{lower}, {upper}] vs [{lower_data_distribution}, {upper_data_distribution}]")
-                            sys.exit()
+                            if lower < lower_data_distribution or upper > upper_data_distribution:
+                                print(f"Constraints for {feature_name} violate the data distribution: [{lower}, {upper}] vs [{lower_data_distribution}, {upper_data_distribution}]")
+                                sys.exit()
                 else:
                     # If no constraints are provided, use the known range for this feature
                     lower, upper = self.features_ranges[feature_name]
@@ -866,7 +853,6 @@ class UGCE:
                     genes.append(random.randint(lower, upper))
                 else:
                     genes.append(random.uniform(lower, upper))
-
         return Individual(genes)
         
     def crossover(self, parents, crossover_points=1):

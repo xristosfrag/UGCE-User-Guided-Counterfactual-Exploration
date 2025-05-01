@@ -61,17 +61,31 @@ class Individual:
         return f"Individual(genes={self.genes}, fitness={self.fitness}, normalized={self.normalized}, decoded={self.decoded})"
 
 class UGCE:
-    def __init__(self, model, scaler, feature_columns, categorical_columns,\
-        numerical_columns, one_hot_encode_features, features_ranges, features_type):
+    def __init__(self, model, dataset,\
+        numerical_columns, categorical_columns):
         self.model = model
-        self.scaler = scaler
-        self.feature_columns = feature_columns
-        self.categorical_columns = categorical_columns
+        self.dataset = dataset
+        self.dataset_length = len(self.dataset)
         self.numerical_columns = numerical_columns
-        self.one_hot_encode_features = one_hot_encode_features
-        self.features_ranges = features_ranges
-        self.features_type = features_type        
-        
+        self.categorical_columns = categorical_columns
+        self.feature_names = self.dataset.columns
+        self.feature_columns_len = len(self.feature_names)
+        self.positive_mask = self.model.predict(dataset) == 1
+        self.positive_indices = dataset.index[self.positive_mask]
+        self.one_hot_encode_features = set(self.feature_names).difference(set(self.numerical_columns))
+        self.dataset, self.categorical_label_encoders = initial_label_encode_data(dataset, self.feature_names, self.categorical_columns)
+        self.min_max_scaler_per_column, self.features_ranges, self.features_type=required_attributes(self.dataset)
+        self.normalized_dataset = normalize_data(self.dataset, self.feature_names, self.dataset)
+        if self.dataset_length >= 60000:
+            self.max_l2_distance, self.max_l1_distance = fast_max_l2_l1_distance(self.normalized_dataset.values)
+        else:
+            # self.max_l2_distance = np.max(compute_distances_in_blocks(self.normalized_dataset.values, block_size=100, representation=16))
+            self.max_l2_distance = np.max(pdist(self.normalized_dataset.values))
+            self.max_l1_distance = np.max(pdist(self.normalized_dataset.values, metric='cityblock'))
+        self.max_sparsity = len(self.feature_names)
+        self.feature_weights_list = get_feature_weights(self.dataset, self.feature_names, self.numerical_columns, self.features_ranges, feature_weights="inverse_mad", encoding="label")   
+        self.numerical_feature_indexes = [i for i, feature_name in enumerate(self.feature_names) if feature_name in numerical_columns]
+  
     def set_seed(self, seed_number):
         """Set seeds for reproducibility in random and np.random."""
         random.seed(seed_number)

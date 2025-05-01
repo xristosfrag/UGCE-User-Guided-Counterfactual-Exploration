@@ -1281,66 +1281,80 @@ class UGCE:
             return None, unique_applicable_cfes_from_scratch, population_generation_time, time_intermediate_from_scratch,\
                   None, generations_from_scratch, unique_applicable_cfes_to_unique_individuals_percentage_from_scratch
     
+    def update_violators(self, population):
+        """
+        Updates violators in the population by adjusting genes that do not satisfy constraints or immutability.
+        """
         population = deepcopy(population)
+        
+        # Precompute immutable and constraint-related checks
+        immutable_set = set(self.immutables)
+        constraints_keys = set(self.constraints.keys())
         for ind in population:
-            skip_indices = []
-            
-            for i in range(len(self.feature_columns)):
-                if i in skip_indices:
+            for i, (gene, ground_point) in enumerate(zip(ind.genes, self.x_label_encoded_numpy)):
+                if gene == ground_point:
                     continue
-                feature_name = self.feature_columns[i]
                 
-                if i in self.immutables:    
-                    if feature_name in self.one_hot_encode_features:
-                        one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
-                        skip_indices.extend([list(self.feature_columns).index(f) for f in one_hot_group])
-                        for index in skip_indices:
-                            ind.genes[index] = self.inverse_transformed_x_indexes[index]
-                    elif self.inverse_transformed_x_indexes[i] == ind.genes[i]:
-                        continue
-                    else:
-                        ind.genes[i] = self.inverse_transformed_x_indexes[i]
-                        continue
-                elif feature_name in self.categorical_columns:
+                feature_name = self.feature_names[i]
+                # Handle immutable features
+                if i in immutable_set:
+                    ind.genes[i] = ground_point
                     continue
-                elif feature_name in self.one_hot_encode_features:
-                    continue
-                else:
-                    if self.constraints.get(i):
-                        if ind.genes[i] == self.inverse_transformed_x_indexes[i]:
-                            continue
-                        else:
-                            lower, upper = self.constraints[i]
-                            if lower < ind.genes[i] < upper:
+                
+                # Handle constraints for numerical features
+                elif i in constraints_keys:
+                    if isinstance(self.constraints[i], str):
+                        if self.constraints[i] == "incr":
+                            if gene > ground_point:
                                 continue
                             else:
+                                # set a random value from the ground point to the upper bound
+                                upper_bound = self.features_ranges[feature_name][1]
                                 if self.features_type[feature_name] == 'int':
-                                    ind.genes[i] = random.randint(lower, upper)
+                                    ind.genes[i] = random.randint(ground_point, upper_bound)
                                 else:
-                                    ind.genes[i] = random.uniform(lower, upper)
-                    else:
-                        continue      
+                                    ind.genes[i] = random.uniform(ground_point, upper_bound)                                
+                        elif self.constraints[i] == "decr":
+                            if gene < ground_point:
+                                continue
+                            else:
+                                # set a random value from the lower bound to the ground point
+                                lower_bound = self.features_ranges[feature_name][0]
+                                if self.features_type[feature_name] == 'int':
+                                    ind.genes[i] = random.randint(lower_bound, ground_point)
+                                else:
+                                    ind.genes[i] = random.uniform(lower_bound, ground_point)
+                    lower, upper = self.constraints[i]
+                    if not (lower < gene < upper):
+                        # Replace with random value within constraints
+                        if self.features_type[feature_name] == 'int':
+                            ind.genes[i] = random.randint(lower, upper)
+                        else:
+                            ind.genes[i] = random.uniform(lower, upper)
         return population
-     
+
     def changed_prediction_individuals(self, population):
         """
-        Find the unique applicable CFEs, count them, and calculate the percentage compared to the unique individuals in a population.
+        Find the unique applicable CFEs, count them, and calculate the percentage 
+        compared to the unique individuals in a population.
+
+        - Returns individuals in their original (label-encoded) form.
+        - Uses decoded versions only for model predictions.
         """
-        # Use a dictionary to keep track of unique individuals based on their genes as the key
         unique_individuals = {tuple(ind.genes): ind for ind in population}
 
-        # Find the unique individuals that change the prediction
+        decoded_genes = decode_label_encoded_data(
+            [ind.genes for ind in unique_individuals.values()], 
+            self.feature_names, self.categorical_columns, self.categorical_label_encoders
+        )
+        decoded_df = pd.DataFrame(decoded_genes, columns=self.feature_names)
+
+        # Find individuals that change the prediction using decoded genes
         unique_applicable_cfes = [
-            ind for genes, ind in unique_individuals.items()
-            if f_model(transform_individual(np.array(genes), self.scaler), self.model) != self.original_prediction
+            individual for ((genes, individual), (_, decoded_instance)) in zip(unique_individuals.items(), decoded_df.iterrows()) 
+            if f_model(decoded_instance.to_frame().T, self.model) != self.original_prediction
         ]
-        
-        identical_individuals_percentage = (len(unique_individuals) / len(population)) * 100
-
-        unique_applicable_cfes_len = len(unique_applicable_cfes)
-        unique_applicable_cfes_to_unique_individuals_percentage = (unique_applicable_cfes_len / len(unique_individuals)) * 100
-
-        return unique_applicable_cfes, identical_individuals_percentage, unique_applicable_cfes_len, unique_applicable_cfes_to_unique_individuals_percentage
+        return unique_applicable_cfes, (len(unique_applicable_cfes) / len(unique_individuals)) * 100
 
     def identical_individuals_percentage(self, population):
         """
@@ -1358,83 +1372,57 @@ class UGCE:
         """
         # Convert each individual's genes to a tuple so they can be counted
         individual_tuples = [tuple(ind.genes) for ind in population]
-        # Count occurrences of each unique individual
         counts = Counter(individual_tuples)
-        # Calculate the number of identical individuals based on their occurrences
         identical_count = sum(count for count in counts.values() if count > 1)
-        # Calculate the percentage of identical individuals in the population
         score = (identical_count / len(population)) * 100
         return score
+        
+    def max_fitness(self, population):
+        return max([ind.fitness for ind in population])
     
-    def best_individuals(self, population, n=1):
-        return max(population, key=lambda ind: ind.fitness)
-    
-    def max_avg_fitness(self, population):
-        fittness_values = [ind.fitness for ind in population]
-        return max(fittness_values), sum(fittness_values) / len(population)
-    
-    # Helper function to ask user for acceptance, presenting the CFE in the original feature space
     def ask_user_acceptance(self, best_individual=None):   
-        # Mock user input (replace with actual user input handling)
+        """
+        Ask the user for acceptance of the counterfactual explanation.
+        :param best_individual: The best individual in the population
+        :return: True if the user accepts the counterfactual explanation, False otherwise"""
         while True:
             if not self.automatic_user_acceptance:
                 user_response = input("Do you accept this counterfactual explanation? (y/n): ").strip().lower()
             else:
                 user_response = self.check_constraints(best_individual)
-                if self.verbose:
-                    print(f"Constraints check: {user_response}")
             if user_response in ["y", "n"]:
-                return user_response == "y"
+                return user_response
             else:
                 print("Invalid input. Please type 'y' or 'n'.")
 
     def check_constraints(self, best_individual):
-        skip_indexes = []
-        for i in range(len(self.feature_columns)):
-            if i in skip_indexes:
-                continue
-            feature_name = self.feature_columns[i]
+        """
+        Check if the best individual adheres to the constraints and immutability.
+        
+        - Parameters:
+            - best_individual: The best individual in the population
 
-            if i in self.immutables:
-                if feature_name in self.one_hot_encode_features:
-                    one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
-                    skip_indexes += [list(self.feature_columns).index(f) for f in one_hot_group]
-                    for index in skip_indexes:
-                        if best_individual.genes[index] != self.inverse_transformed_x_indexes[index]:
-                            if self.verbose:
-                                print(f"Feature '{feature_name}' is immutable. Expected value: {self.inverse_transformed_x_indexes[index]}, found: {best_individual.genes[index]}.")
-                            return 'n'
-                elif self.inverse_transformed_x_indexes[i] != best_individual.genes[i]:
-                    if self.verbose:
-                        print(f"Feature '{feature_name}' is immutable. Expected value: {self.inverse_transformed_x_indexes[i]}, found: {best_individual.genes[i]}.")
-                    return 'n'
-                
-            elif feature_name in self.categorical_columns and self.data_distribution:
-                if best_individual.genes[i] not in self.features_ranges[feature_name]:
-                    if self.verbose:
-                        print(f"Feature '{feature_name}' value is not in the known distribution: {best_individual.genes[i]}.")
-                    return 'n'
-                
-            elif feature_name in self.one_hot_encode_features:
-                one_hot_group = [f for f in self.one_hot_encode_features if f.startswith(feature_name.split('_')[0])]
-                skip_indexes += [list(self.feature_columns).index(f) for f in one_hot_group]
-                count_changes = 0
-                for index in skip_indexes:
-                    if best_individual.genes[index] != self.inverse_transformed_x_indexes[index]:
-                        count_changes += 1
-                if count_changes > 2:
-                    if self.verbose:
-                        print(f"Feature '{feature_name}' has more than one change. Expected: {self.inverse_transformed_x_features[feature_name]}, found: {best_individual.genes[i]}.")
-                    return 'n'
-            else:
-                if self.constraints.get(i):
-                    lower, upper = self.constraints[i]
-                    if not lower <= best_individual.genes[i] <= upper:
-                        if self.verbose:
-                            print(f"Feature '{feature_name}' value is out of bounds: {best_individual.genes[i]}. Expected: [{lower}, {upper}].")
+        - Returns:
+            - 'y' if the best individual adheres to the constraints and immutability
+            - 'n' otherwise
+        """
+        for i in self.immutables:
+            if best_individual.genes[i] != self.x_label_encoded_numpy[i]:
+                return 'n'
+            elif self.x_label_encoded_numpy[i] != best_individual.genes[i]:
+                return 'n'
+        for i in self.constraints:
+            if isinstance(self.constraints[i], str):
+                if self.constraints[i] == "incr":
+                    if not (best_individual.genes[i] > self.x_label_encoded_numpy[i]):
                         return 'n'
-        if self.verbose:
-            print("All constraints are satisfied.")
+                elif self.constraints[i] == "decr":
+                    if not (best_individual.genes[i] < self.x_label_encoded_numpy[i]):
+                        return 'n'
+            else:
+                lower, upper = self.constraints[i]
+                if not (lower <= best_individual.genes[i] <= upper):
+                    return 'n'
         return 'y'
 
     # Mock function to get updated constraints from the user in the original space

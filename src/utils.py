@@ -211,7 +211,21 @@ def inverse_transform_individual(scaled_individual, scaler, feature_columns):
     return original_individual[0], pd.DataFrame(original_individual, columns=feature_columns).iloc[0].to_dict()
 
 def f_model(instance, model):
-    return model.predict(instance.reshape(1, -1))[0]
+    # model is a pipeline
+    if isinstance(model, Pipeline):
+        if isinstance(instance, pd.DataFrame):
+            prediction = model.predict(instance)
+        else:
+            raise ValueError("Unsupported input type. Expected pandas DataFrame.")
+    else:
+        if isinstance(instance, pd.DataFrame):
+            instance = instance.to_numpy().reshape(1, -1)
+        else:
+            instance = instance.reshape(1, -1)
+        
+        prediction = model.predict(instance)[0]
+
+    return prediction
 
 def display_cfe_comparison(original, cfe):
     table = PrettyTable()
@@ -219,11 +233,9 @@ def display_cfe_comparison(original, cfe):
 
     for feature, original_value in original.items():
         proposed_value = cfe[feature]
-        # Calculate the difference for numerical changes
         if isinstance(original_value, (int, float)) and isinstance(proposed_value, (int, float)):
             change = f"{proposed_value - original_value:+}" if original_value != proposed_value else ""
         else:
-            # For non-numeric values (like categorical one-hot encoded), use "->" notation if there's a change
             change = "->" if original_value != proposed_value else ""
 
         table.add_row([feature, original_value, proposed_value, change])

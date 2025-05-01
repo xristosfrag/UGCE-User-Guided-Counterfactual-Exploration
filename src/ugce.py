@@ -1424,120 +1424,95 @@ class UGCE:
                 if not (lower <= best_individual.genes[i] <= upper):
                     return 'n'
         return 'y'
+ 
+    def get_updated_constraints(self, values=None):
+        if values:
+            self.updated_constraints_local = values
+        else:
+            self.updated_constraints_local = self.updated_constraints
 
-    # Mock function to get updated constraints from the user in the original space
-    def get_updated_constraints(self):
-        if self.verbose:
-            print(f"Updating constraints for features values...")
-
-        # Get base feature name for one-hot encoded features
-        one_hot_base_features = set(f.split('_')[0] for f in self.one_hot_encode_features)        
-        skip_indices = []
-        
-        for i, feature in enumerate(self.feature_columns):
-            if i in skip_indices:
-                continue
-            
-            base_feature_name = feature.split('_')[0]    
-            if base_feature_name in one_hot_base_features:
+        for index, feature_name in enumerate(self.feature_names):
+            current_feature = self.feature_names[index]
+            if feature_name in self.categorical_columns:
                 while True:
-                    if feature in self.updated_constraints:
-                        user_input = self.updated_constraints[feature]
+                    if feature_name in self.updated_constraints_local:
+                        user_input = self.updated_constraints_local[feature_name]
                     else:
-                        user_input = input(f"Set '{base_feature_name}' as immutable? ('i' for immutable, 'ni' to remove immutability or Enter to skip): ").strip()
-                    
-                    find_indices = [i for i, f in enumerate(self.feature_columns) if f.startswith(base_feature_name)]
-                    skip_indices.extend(find_indices)
-                    
+                        user_input = input(
+                            f"Set '{feature_name}' as immutable? ('i' for immutable, 'ni' to remove immutability or Enter to skip): "
+                        ).strip()
+
                     if user_input == "":
-                        if self.verbose:
-                            print(f"Feature '{base_feature_name}' is passed (no new constraints).")
                         break
                     elif user_input == "i":
-                        for idx in find_indices:
-                            if idx not in self.immutables:
-                                self.immutables.append(idx)
-                        if self.verbose:
-                            print(f"Feature '{base_feature_name}' marked as immutable.")
+                        if index not in self.immutables:
+                            self.immutables.add(index)
                         break
                     elif user_input == "ni":
-                        ## remove the immutable constraint
-                        ## pop the skip indices from the self.immutables
-                        for idx in find_indices:
-                            self.immutables.remove(idx)                        
-                        if self.verbose:
-                            print(f"Feature '{base_feature_name}' is no longer immutable.")
+                        if index in self.immutables:
+                            self.immutables.remove(index)
                         break
             else:
                 while True:
-                    if feature in self.updated_constraints:
-                        user_input = self.updated_constraints[feature]
+                    current_feature = self.feature_names[index]
+                    if current_feature in self.updated_constraints_local:
+                        user_input = self.updated_constraints_local[current_feature]
                     else:
-                        user_input = input(f"Enter the lower and upper bounds for feature '{feature}' (or 'i' to make it immutable or 'ni' to remove immutability, Enter to skip): ").strip()
-                    
-                    # User presses enter to pass the feature (no change)
+                        user_input = input(
+                            f"Options: 1. Enter the lower and upper bounds for feature '{current_feature}'\n 2. 'i' to make it immutable or 'ni' to remove immutability \n 3. 'incr' to only increase or 'decr' to only decrease. Enter to skip): "
+                        ).strip()
                     if user_input == "":
-                        if self.verbose:
-                            print(f"Feature '{feature}' is passed (no new constraints).")
                         break
-                    
-                    # User enters '-' to mark the feature as immutable
                     elif user_input == "i":
-                        self.immutables.append(i)
-                        ## if the feature is in the constraints then remove it
-                        if i in self.constraints:
-                            self.constraints.pop(i)
-                            if self.verbose:
-                                print(f"Feature '{feature}' marked as immutable. Constraints removed.")
-                        else:
-                            if self.verbose:
-                                print(f"Feature '{feature}' marked as immutable.")                        
+                        if index not in self.immutables:
+                            self.immutables.add(index)
+                        self.constraints.pop(index, None)
                         break
-                    
                     elif user_input == "ni":
-                        if self.verbose:
-                            print(f"Feature '{feature}' is no longer immutable.")
-                        ## remove the immutable constraint
-                        self.immutables.remove(i)
+                        if index in self.immutables:
+                            self.immutables.remove(index)
                         break
-                    
-                    # User enters a lower and upper bound
+                    elif user_input == "incr":
+                        if index in self.immutables:
+                            self.immutables.remove(index)
+                        self.constraints[index] = (self.x_label_encoded_numpy[index], self.features_ranges[current_feature][1])
+                        break
+                    elif user_input == "decr":
+                        if index in self.immutables:
+                            self.immutables.remove(index)
+                        self.constraints[index] = (self.features_ranges[current_feature][0], self.x_label_encoded_numpy[index])
+                        break
                     else:
                         try:
-                            lower, upper = map(float, user_input.split())
-                            if lower > upper:
-                                print("Lower bound cannot be greater than upper bound. Please try again.")
-                            else:
-                                self.constraints[i] = (lower, upper)
-                                ## if the feature is in the immutable list then remove it
-                                if i in self.immutables:
-                                    self.immutables.remove(i)
-                                    if self.verbose:
-                                        print(f"Feature '{feature}' set to [{lower}, {upper}] and is no longer immutable.")
-                                else:
-                                    if self.verbose:
-                                        print(f"Feature '{feature}' set to [{lower}, {upper}].")
+                            lower, upper = map(float, [user_input[0], user_input[1]])
+                            if lower <= upper:
+                                self.constraints[index] = (lower, upper)
+                                if index in self.immutables:
+                                    self.immutables.remove(index)
                                 break
+                            else:
+                                print("Lower bound cannot be greater than upper bound. Please try again.")
                         except ValueError:
-                            print("Invalid input. Please enter two numeric values or '-' to mark as immutable.")
-
+                            print("Invalid input. Please enter two numeric values or 'i'/'ni' for immutability.")
+                    
     def setup_constraints(self):
-        ## transform the constraints to indices
         constraints = {}
-        self.immutables = []
-        for feature, value in self.constraints.items():
-            ## find if the feature is in the first part of the one-hot encoded features before the '_'
-            found_onehot_encoded_feature = False
-            for f in self.one_hot_encode_features:
-                if feature.startswith(f.split('_')[0]):
-                    found_onehot_encoded_feature = True
-                    self.immutables.append(list(self.feature_columns).index(f))
-            
-            if found_onehot_encoded_feature:
-                continue
-            if value == '-':
-                self.immutables.append(list(self.feature_columns).index(feature))
-            else:
-                index = list(self.feature_columns).index(feature)
-                constraints[index] = value
-        self.constraints = constraints
+        self.immutables = set()
+        if not self.multistep_updated_constraints:
+            for feature, value in self.constraints.items():
+                if value == '-':
+                    self.immutables.add(list(self.feature_names).index(feature))
+                else:
+                    index = list(self.feature_names).index(feature)
+                    constraints[index] = value
+            self.constraints = constraints
+        # In case initial constraints exists, and incremental too
+        else:
+            for i, constraints in self.constraints.items():
+                for feature, value in constraints.items():
+                    if value == '-':
+                        self.immutables.add(list(self.feature_names).index(feature))
+                    else:
+                        index = list(self.feature_names).index(feature)
+                        constraints[index] = value
+                self.constraints[i] = constraints

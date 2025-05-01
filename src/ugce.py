@@ -665,13 +665,100 @@ class UGCE:
             print(f"Empty intermediate counter: {empty_intermediate_counter}")
         return results_X
 
-    def distance(self, x_prime):
-        return np.linalg.norm(np.array(self.inverse_transformed_x_indexes) - np.array(x_prime))
+    def l2_distance(self, *args):
+        if len(args) == 1:
+            x_prime = args[0]
+            return np.linalg.norm(np.array(self.normalized_x_numpy) - np.array(x_prime))
+        elif len(args) == 2:
+            a, b = args
+            return np.linalg.norm(np.array(a) - np.array(b).reshape(1,-1), axis=1)
+        else:
+            raise ValueError("Invalid number of arguments. Provide 1 or 2 arguments.")
+    
+    def normalized_l2_distance(self, *args):
+        if len(args) == 1:
+            x_prime = args[0]
+            return np.linalg.norm(np.array(self.normalized_x_numpy) - np.array(x_prime)) / self.max_l2_distance
+        elif len(args) == 2:
+            a, b = args
+            return np.linalg.norm(np.array(a) - np.array(b).reshape(1,-1), axis=1) / self.max_l2_distance
+        else:
+            raise ValueError("Invalid number of arguments. Provide 1 or 2 arguments.")
 
-    def sparsity(self, x_prime):
-        return np.sum(np.abs(np.array(self.inverse_transformed_x_indexes) - np.array(x_prime)) > 1e-6)
+    def l1_distance(self, *args):
+        if len(args) == 1:
+            x_prime = args[0]
+            return np.linalg.norm(np.array(self.normalized_x_numpy) - np.array(x_prime), ord=1)
+        elif len(args) == 2:
+            a, b = args
+            a = np.array(a)
+            b = np.array(b)
+            if b.ndim == 1:
+                b = b.reshape(1, -1)
+            return np.sum(np.abs(a - b), axis=1)
+        else:
+            raise ValueError("Invalid number of arguments. Provide 1 or 2 arguments.")
+        
+    def normalized_l1_distance(self, *args):
+        if len(args) == 1:
+            x_prime = args[0]
+            return np.linalg.norm(np.array(self.normalized_x_numpy) - np.array(x_prime), ord=1) / self.max_l1_distance
+        elif len(args) == 2:
+            a, b = args
+            a = np.array(a)
+            b = np.array(b)
+            if b.ndim == 1:
+                b = b.reshape(1, -1)
+            return np.sum(np.abs(a - b), axis=1) / self.max_l1_distance
+        else:
+            raise ValueError("Invalid number of arguments. Provide 1 or 2 arguments.")
+    
+    def compute_proximity_loss_dice(self, *args):
+        """Compute weighted distance between two vectors."""
+        genes = None
+        if len(args) == 1:
+            genes = args[0]
+            query_instance_normalized = self.normalized_x_numpy
+        elif len(args) == 2:
+            # this works between the incremental best, intermediate best cfe
+            genes, query_instance_normalized = args 
+        else:
+            raise ValueError("Expected 1 or 2 arguments, got {}".format(len(args)))
 
-    def violation(self, x_prime, verbose=False):
+        feature_weights = np.array(
+            [self.feature_weights_list[0][i] for i in self.numerical_feature_indexes]
+        )
+        if genes.ndim == 1:
+            genes = genes.reshape(1, -1)
+        product = np.multiply(
+            abs(genes[:, self.numerical_feature_indexes] - query_instance_normalized[self.numerical_feature_indexes]),
+            feature_weights
+        )
+        return np.sum(product, axis=1) / sum(feature_weights)
+
+    def sparsity(self, *args):
+        """Compute weighted sparsity between two vectors."""
+        if len(args) == 1:
+            x_prime = args[0]
+            return np.count_nonzero(np.array(self.normalized_x_numpy) - np.array(x_prime))
+        elif len(args) == 2:
+            a, b = args
+            return np.count_nonzero(np.array(a) - np.array(b).reshape(1,-1), axis=1)
+        else:
+            raise ValueError("Invalid number of arguments. Provide 1 or 2 arguments.")
+        
+    def normalized_sparsity(self, *args):
+        """Compute weighted sparsity between two vectors."""
+        if len(args) == 1:
+            x_prime = args[0]
+            return np.count_nonzero(np.array(self.normalized_x_numpy) - np.array(x_prime)) / self.max_sparsity
+        elif len(args) == 2:
+            a, b = args
+            return np.count_nonzero(np.array(a) - np.array(b).reshape(1,-1), axis=1) / self.max_sparsity
+        else:
+            raise ValueError("Invalid number of arguments. Provide 1 or 2 arguments.")
+
+    def violation(self, x_prime):
         """
         Calculate the violation of the constraints for the new solution x_prime.
         The constraints are given as a dictionary with the key being the index of the feature and the value being a tuple
@@ -684,51 +771,25 @@ class UGCE:
         
         for attribute_index, value in enumerate(x_prime):
             if attribute_index in self.immutables:
-                # Feature is immutable, reward more if unchanged, penalize more if changed
-                if x_prime[attribute_index] == self.inverse_transformed_x_indexes[attribute_index]:
-                    immutable_score += 1000  # Larger reward for immutable feature remaining unchanged
-                    if verbose:
-                        print("Feature {} is immutable and unchanged. Reward: {}".format(attribute_index, immutable_score))
-                else:
-                    immutable_score -= 1000  # Larger penalty for immutable feature changing
-                    if verbose:
-                        print("Feature {} is immutable and changed. Penalty: {}".format(attribute_index, immutable_score))
-            else:
-                if attribute_index not in self.constraints:
-                    # No constraints on this feature
-                    continue
+                immutable_score += 1000 if x_prime[attribute_index] == self.x_numpy[attribute_index] else -1000
+            elif attribute_index in self.constraints:
+                feature = self.feature_names[attribute_index]
                 lower, upper = self.constraints[attribute_index]
                 if lower <= x_prime[attribute_index] <= upper:
-                    # Reward if the feature is within the bounds
                     ranges_score += 1000
-                    if verbose:
-                        print("Feature {} is within bounds. Reward: {}".format(attribute_index, ranges_score))
                 else:
-                    # Apply penalty if the feature is outside the bounds
-                    ranges_score -= 1000 * abs(x_prime[attribute_index] - lower) if x_prime[attribute_index] < lower else abs(x_prime[attribute_index] - upper)
-                    if verbose:
-                        print("Feature {} is outside bounds. Penalty: {}".format(attribute_index, ranges_score))
+                    scaler = self.min_max_scaler_per_column[feature]
+                    lower_scaled_bound, upper_scaled_bound = scaler.transform(
+                        np.array([[lower], [upper]]).reshape(-1, 1)).flatten()
+
+                    x_prime_scaled_value = scaler.transform(
+                        np.array([x_prime[attribute_index]]).reshape(-1, 1))[0][0]
+
+                    ranges_score -= 1000 * abs(x_prime_scaled_value - lower_scaled_bound) if x_prime_scaled_value < lower_scaled_bound else abs(x_prime_scaled_value - upper_scaled_bound)
 
         # Return both the penalty and the reward
         return immutable_score, ranges_score
-   
-    def evaluate(self, individual, verbose=False):
-        y_prime = f_model(transform_individual(np.array(individual), self.scaler), self.model)
-        d = self.distance(individual)
-        s = self.sparsity(individual)
-        y_score = 0
-        if y_prime == self.original_prediction:
-            y_score -= 10000
-        else:
-            y_score += 10000
-        if self.constraints != {} or self.immutables != []:
-            immutable_score, ranges_score = self.violation(individual, verbose=verbose)
-        else:
-            immutable_score, ranges_score = 0, 0
-        if verbose:
-            print(f"Distance: {d}, Sparsity: {s}, Immutable_score: {immutable_score}, Ranges_score: {ranges_score}")
-        return - self.lambda1 * d - self.lambda2 * s + self.lambda3 * y_score + self.lambda4 * immutable_score + self.lambda5 * ranges_score
-    
+       
     def generate_individual(self):
         """
         Generate an individual by considering constraints, immutability, and categorical/numerical ranges.

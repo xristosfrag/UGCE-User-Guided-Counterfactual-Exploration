@@ -235,53 +235,71 @@ class UGCE:
             ind.decoded = decoded.values
    
     def explain_instances(self, instances_to_explain, constraints=None, immutables=None,\
-        diversity_top_k=1, evaluation=False, dynamic_constraints=False,\
+        evaluation=False, dynamic_constraints=False,\
         initial_population_variability=0.2, data_distribution=True,\
-            seed_number=42, fix_population=True, complete_random=True, population_size_dynamic=10,\
-            num_generations=50, population_size=50, regeneration_tries=2, num_parents=10,\
-            selection_method="tournament", tournsize=3,\
-            early_stopping_iterations=3, elite_ratio=0.1, \
-            lambda1=1, lambda2=1, lambda3=1, lambda4=1, lambda5=1, cxpb=0.5, crossover_points=3, mutpb=0.2,\
-            updated_constraints=None, automatic_user_acceptance=True, verbose=True):
+        seed_number=42, strategy="fix_population_update_fitness",\
+        initial_population_strategy = "random", population_size_dynamic=0,\
+        num_generations=50, population_size=50, regeneration_tries_intermediate=5,\
+        regeneration_tries_intermediate_after_updating_constraints= 1, num_parents=10,\
+        cfes_requested=1, selection_method="tournament", tournsize=3,\
+        early_stopping_iterations=3, thresh=1e-2, elite_ratio=0.1, \
+        cxpb=0.5, crossover_points=3, mutpb=0.2, distance_metric="weighted_l1",\
+        updated_constraints=None, multistep_updated_constraints=False, automatic_user_acceptance=True, verbose=False,
+        running_times_per_instance=10, normalized_fitness=True, reweighting_lambdas_after_generations=-1,
+        initial_lambdas_without_constraints={"lambda1":0.2, "lambda2":0.2, "lambda3":1},
+        initial_lambdas_with_constraints={"lambda1":0.2, "lambda2":0.2, "lambda3":1},
+        lambdas_after_updating_constraints={"lambda1":0.2, "lambda2":0.2, "lambda3":1},
+        lambdas_reweighting_after_updating_constraints_and_some_generations={"lambda1":0.2, "lambda2":0.2, "lambda3":1}):
         """
-        Explain the instance by evolving counterfactual examples.
+        Generates counterfactual explanations by evolving a population of candidate counterfactuals.
+
+        ### Parameters:
+        - **instances_to_explain** (*pd.DataFrame*): The dataset instances to explain.
+        - **constraints** (*dict, default=None*): Dictionary specifying constraints on feature changes.
+        - **immutables** (*list, default=None*): List of features that must remain unchanged.
+        - **evaluation** (*bool, default=False*): Whether to evaluate counterfactual quality using predefined metrics.
+        - **dynamic_constraints** (*bool, default=False*): Whether to apply dynamically updated constraints during evolution.
+        - **initial_population_variability** (*float, default=0.2*): Controls diversity in the initial population (higher means more variation).
+        - **data_distribution** (*bool, default=True*): Whether to sample new instances following the original data distribution.
+        - **seed_number** (*int, default=42*): Random seed for reproducibility.
+        - **strategy** (*str, default="fix_population_update_fitness"*): Defines how the population is evolved.
+        - **initial_population_strategy** (*str, default="random"*): Strategy for initializing the population (`"random"` or `"guided"`).
+        - **population_size_dynamic** (*int, default=0*): If >0, allows population size to change dynamically.
+        - **num_generations** (*int, default=50*): Number of generations to evolve the population.
+        - **population_size** (*int, default=50*): Number of individuals in each generation.
+        - **regeneration_tries_intermediate** (*int, default=5*): Maximum attempts to regenerate a valid population before giving up.
+        - **regeneration_tries_intermediate_after_updating_constraints** (*int, default=1*): Regeneration attempts after constraints are updated.
+        - **num_parents** (*int, default=10*): Number of parents selected per generation for reproduction.
+        - **cfes_requested** (*int, default=1*): Number of counterfactuals to generate per instance.
+        - **selection_method** (*str, default="tournament"*): Selection strategy (`"tournament"`, `"roulette"`, `"rank"`, `"sus"`, `"50percentbest"`).
+        - **tournsize** (*int, default=3*): Size of the tournament selection group.
+        - **early_stopping_iterations** (*int, default=3*): Stops evolution if no improvement is observed for this many generations.
+        - **thresh** (*float, default=1e-2*): Threshold for determining if a generation has improved.
+        - **elite_ratio** (*float, default=0.1*): Proportion of top individuals to retain between generations.
+        - **cxpb** (*float, default=0.5*): Probability of applying crossover to selected parents.
+        - **crossover_points** (*int, default=3*): Number of crossover points during mating.
+        - **mutpb** (*float, default=0.2*): Probability of mutating an offspring.
+        - **updated_constraints** (*dict, default=None*): Constraints to apply after the evolution process starts.
+        - **automatic_user_acceptance** (*bool, default=True*): If `True`, automatically accepts counterfactuals that meet constraints.
+        - **verbose** (*bool, default=False*): Whether to print detailed logs during execution.
+        - **running_times_per_instance** (*int, default=10*): Number of times to run the pipeline for each instance.
+        - **normalized_fitness** (*bool, default=True*): Whether to normalize fitness scores.
+        - **reweighting_lambdas_after_generations** (*int, default=-1*): Number of generations before adjusting the lambda values.
+        
+        ### **Lambda Weight Parameters** (For loss function balancing):
+        - **initial_lambdas_without_constraints** (*dict*): Weights used when constraints are NOT applied.
+        - `"lambda1": 0.25`, `"lambda2": 0.25`, `"lambda3": 0.5`, `"lambda4": 0.0`, `"lambda5": 0.0`
+        - **initial_lambdas_with_constraints** (*dict*): Weights used when constraints ARE applied.
+        - `"lambda1": 0.1`, `"lambda2": 0.1`, `"lambda3": 0.3`, `"lambda4": 0.25`, `"lambda5": 0.25`
+        - **lambdas_after_updating_constraints** (*dict*): Weights used after constraints are dynamically updated.
+        - `"lambda1": 0.1`, `"lambda2": 0.1`, `"lambda3": 0.3`, `"lambda4": 0.25`, `"lambda5": 0.25`
+        - **lambdas_reweighting_after_updating_constraints_and_some_generations** (*dict*): Weights used after multiple updates.
+        - `"lambda1": 0.25`, `"lambda2": 0.25`, `"lambda3": 0.3`, `"lambda4": 0.1`, `"lambda5": 0.1`
+
+        ### **Returns:**
+        - **List of best individuals for each instance** (*list*): Counterfactual explanations found during evolution.
         """
-        self.x = x
-        ## get the scaled individual for the original instance x to use it as a reference for the new individual
-        self.inverse_transformed_x_indexes, self.inverse_transformed_x_features = inverse_transform_individual(self.x, self.scaler, self.feature_columns)
-        print(f"Explaining instance {self.inverse_transformed_x_features}")
-        self.diversity_top_k = diversity_top_k
-        self.evaluation = evaluation
-        self.dynamic_constraints = dynamic_constraints
-        self.initial_population_variability = initial_population_variability
-        self.num_generations = num_generations
-        self.early_stopping_iterations = early_stopping_iterations
-        self.elite_ratio = elite_ratio # Percentage of individuals to retain from both current and offspring population
-        self.data_distribution = data_distribution
-        
-        self.fix_population = fix_population
-        self.population_size_dynamic = population_size_dynamic
-        self.complete_random = complete_random
-        self.num_generations = num_generations
-        self.population_size = population_size
-        self.regeneration_tries = regeneration_tries
-        self.num_parents = num_parents
-        self.selection_method = selection_method
-        self.tournsize = tournsize
-        
-        self.lambda1 = lambda1
-        self.lambda2 = lambda2
-        self.lambda3 = lambda3
-        self.lambda4 = lambda4
-        self.lambda5 = lambda5
-        self.cxpb = cxpb
-        self.crossover_points = crossover_points
-        self.mutpb = mutpb
-        
-        self.updated_constraints = updated_constraints
-        self.automatic_user_acceptance = automatic_user_acceptance
-        self.verbose = verbose
-        if not self.complete_random:
+        self.initial_population_strategy = initial_population_strategy
             self.seed_number = seed_number
             self.seed_update_number = 0
             # Reset seeds to ensure reproducibility in each call

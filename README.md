@@ -48,6 +48,16 @@ Experimental results across five benchmark datasets demonstrate that UGCE signif
     ```bash
     pip install -r requirements.txt
     ```
+## Citation
+If you found UGCE useful in your research, please consider starring ⭐ us on GitHub and citing 📚 us in your research!
+```bibtex
+@article{fragkathoulas2025ugce,
+  title={UGCE: User-Guided Incremental Counterfactual Exploration},
+  author={Fragkathoulas, Christos and Pitoura, Evaggelia},
+  journal={arXiv preprint arXiv:2505.21330},
+  year={2025}
+}
+```
 
 ## Acknowledgement
 This work has been partially supported by project MIS 5154714 of the National Recovery and Resilience Plan Greece 2.0 funded by the European Union under the NextGenerationEU Program.
